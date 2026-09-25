@@ -51,7 +51,7 @@ The implementation targets **Forge Neo's native Klein reference-image path**, no
 
 You need:
 
-- A working Forge Neo installation with FLUX.2 Klein support.
+- A working [Forge Neo installation](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo). The neo branch now officially supports both FLUX.2 Klein and Qwen Image 2.1 / Qwen-Image-Edit, which are the two model families this extension auto-switches between.
 - A Klein 4B or 9B checkpoint and a **matching** BFS face/head-swap LoRA. A Qwen-image-edit BFS LoRA is not interchangeable with Klein. Automatic selection requires a recognizable model size and a matching named adapter; manual selection can be used for a known custom adapter.
 - At least one reference headshot and one img2img target image.
 - Pillow and NumPy from Forge's environment. Optional face analysis additionally uses MediaPipe and its face-landmarker task model, or the legacy MediaPipe FaceMesh API when available.
