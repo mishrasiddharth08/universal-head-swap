@@ -73,7 +73,7 @@ class UniversalHeadSwap(scripts.Script):
             C[key]=gr.Textbox(label=label,value=str(defaults[key] or ''),**kw); return C[key]
         try: names=list(runtime.registry()) if HOST else []
         except Exception as e: names=[]; print(f'[UniversalHeadSwap] Adapter list unavailable: {e}')
-        with InputAccordion(False,label=f'Universal Head Swap | {core.VERSION}') as C['enable']:
+        with InputAccordion(False,label='Universal Head Swap') as C['enable']:
             gr.Markdown('Use your **img2img picture** as the target. Add identity headshots below, then use Forge’s **Generate** button.')
             if BRIDGE_ERROR:
                 gr.Markdown('**Unavailable:** '+BRIDGE_ERROR); C['enable'].interactive=False
