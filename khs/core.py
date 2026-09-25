@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from . import data
 from .negative_catalog import CATALOG
 
-VERSION = '7.0.0-rc1'
+VERSION = '1.0'
 LEGACY_KEYS = [
     'enable','headshots','lora_dropdown','lora_strength','char_lora_name','char_lora_strength','char_lora_trigger',
     'hairstyle','hair_color','makeup','expression','expression_strength','lighting','age','ethnicity','camera',

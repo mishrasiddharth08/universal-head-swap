@@ -1,4 +1,4 @@
-# Universal Head Swap — 6.0.0-rc5
+# Universal Head Swap
 
 Head swapping and appearance cleanup for **Forge Neo with FLUX.2 Klein**, using the original picture as the body/scene reference and a selected headshot as the identity reference. This edition rebuilds the Enhanced v5.4 implementation around explicit settings, scoped Forge integration, reproducible reference selection, and measurable output checks.
 
