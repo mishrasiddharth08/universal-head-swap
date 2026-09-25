@@ -83,6 +83,20 @@ a{color:var(--accent)}
 </table>
 <p class="note">Everything else — removal policies, protected editing, face audit, presets, fine-grid cleanup, quality gates — is identical in both modes.</p>
 
+<h2>How it works</h2>
+<img src="docs/workflow.svg" alt="5-step workflow: Load checkpoint, img2img target, 1-20 headshots, Check setup, Generate" style="width:100%;border:1px solid var(--border);border-radius:10px">
+<p class="note">Model auto-switch: pick the checkpoint in Forge's normal dropdown — the extension follows. No mode toggle exists.</p>
+
+<h2 id="usage">Step-by-step usage</h2>
+<ol>
+  <li><b>Load</b> a Klein 4B/9B or Qwen Image Edit 2.1 checkpoint and its matching BFS LoRA.</li>
+  <li><b>Open img2img</b> and upload the body/scene target picture.</li>
+  <li><b>Enable Universal Head Swap</b> in the accordion and upload 1–20 sharp identity headshots.</li>
+  <li><b>Check setup</b> — the preview shows the selected reference, edit area and the fully resolved prompt before any generation.</li>
+  <li><b>Generate</b> with Forge's normal button. Inspect <b>Show last generation report</b>, then check the output at 100% zoom.</li>
+</ol>
+<img src="docs/ui-panel.svg" alt="Panel layout: main accordion, quick checks, More options with Look, References, Adapters, Memory, Detail, Presets tabs" style="width:100%;border:1px solid var(--border);border-radius:10px;margin-top:1rem">
+
 <h2 id="install">Install</h2>
 <pre><code>cd &lt;forge&gt;/extensions
 git clone https://github.com/YOUR-USERNAME/universal-head-swap
