@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0 — 2026-09-25 · Universal Head Swap
+
+**One extension. Two models. Zero toggles.**
+
+- 🔁 **Dual-model engine** — FLUX.2 Klein 4B/9B *and* Qwen Image Edit 2.1. Switch the checkpoint; the extension auto-switches its reference plumbing, LoRA matching and prompt formatting.
+- 🎭 **Full Klein feature set on Qwen 2.1** — protected head edit, removal policies, face-match auditing, presets, fine-grid cleanup, quality gates. Nothing dropped.
+- 🧬 **Family-locked adapters** — Klein and Qwen BFS/character LoRAs can never cross-load. Auto-match works in both modes.
+- ⚡ **Project Invisible memory policy** — device-aware probing, bounded reference budgets, OOM retry, 256 MiB encode cache. NVIDIA, AMD ROCm and CPU. Any VRAM, any quantization.
+- 🖥️ **Cleaner UI** — dedicated **Adapters** and **Memory** tabs in More options.
+- ✅ **119 offline tests passing**; no Forge core edits — delete the folder and Forge is stock.
+
 ## 6.0.0-rc5 — 2026-09-21
 
 - Added optional, default-off automatic DeGrid cleanup with clean-image bypass, bounded correction and adjustable strength.
