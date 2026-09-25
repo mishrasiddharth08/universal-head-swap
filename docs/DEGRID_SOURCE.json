@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/lunaaispace-eng/ComfyUI-DeGrid",
+  "commit": "5699bc33f71e1be12523fdea105cc9c2abfe1cd0",
+  "license": "Apache-2.0",
+  "adaptation": "Pillow/NumPy CPU implementation, tiled filtering, configurable blend, Gradio integration; not the original ComfyUI node"
+}

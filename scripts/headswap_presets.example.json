@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "extension_version": "6.0.0-rc3",
+  "presets": {
+    "Whole-body cleanup starting point": {
+      "edit_scope": "Full image edit",
+      "removal_priority": true,
+      "ban_bindi": "Remove",
+      "ban_earrings": "Remove",
+      "ban_tattoos": "Remove",
+      "ban_piercings": "Remove",
+      "ban_cross": "Remove",
+      "ban_jewelry": "Remove",
+      "keep_original_canvas": true,
+      "ratio_lock": true,
+      "geometry_match": true,
+      "match_sharpness": true,
+      "quality_strict": false,
+      "lora_dropdown": "Auto (match model)",
+      "lora_strength": 1.0,
+      "ban_channel": "Positive + Negative (uses at least CFG 1.1)",
+      "identity_check": true,
+      "identity_threshold": 0.363,
+      "geometry_correct": false
+    }
+  }
+}

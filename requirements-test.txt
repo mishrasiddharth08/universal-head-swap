@@ -1,0 +1,7 @@
+# Core/stand-in tests only. Prefer the already installed Forge environment.
+numpy>=1.26,<3
+Pillow>=10,<13
+# Real UI construction also uses Forge's installed Gradio; do not replace it.
+
+# Reproduce JPEG metadata overflow using the same serializer as Forge.
+piexif==1.1.3

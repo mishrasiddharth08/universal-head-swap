@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Universal Head Swap — Forge Neo extension for FLUX.2 Klein &amp; Qwen Image Edit 2.1</title>
+<meta name="description" content="One extension, two models. BFS head swapping for FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 in Forge Neo — auto mode switching, protected head editing, face-match auditing, memory-efficient on any GPU.">
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--purple:#bc8cff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;line-height:1.6}
+.wrap{max-width:960px;margin:0 auto;padding:2rem 1.25rem}
+header{text-align:center;padding:4rem 1.25rem 2rem}
+h1{font-size:2.6rem;background:linear-gradient(90deg,#58a6ff,#bc8cff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.tagline{color:var(--muted);font-size:1.2rem;margin-top:.75rem}
+.badges{margin-top:1.25rem;display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap}
+.badge{background:var(--card);border:1px solid var(--border);border-radius:999px;padding:.25rem .9rem;font-size:.85rem;color:var(--muted)}
+.badge b{color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin:2.5rem 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.25rem}
+.card h3{margin-bottom:.5rem;font-size:1.05rem}
+.card p{color:var(--muted);font-size:.92rem}
+.card .icon{font-size:1.5rem}
+h2{margin:2.5rem 0 1rem;font-size:1.5rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0}
+th,td{border:1px solid var(--border);padding:.55rem .75rem;text-align:left;font-size:.92rem}
+th{background:var(--card)}
+td:first-child{color:var(--accent);white-space:nowrap}
+code{background:var(--card);border:1px solid var(--border);border-radius:5px;padding:.1rem .4rem;font-size:.88em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;border:none}
+.note{border-left:3px solid var(--accent);padding:.75rem 1rem;background:var(--card);border-radius:0 8px 8px 0;color:var(--muted);font-size:.92rem;margin:1rem 0}
+.thanks{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin-top:3rem}
+.thanks h2{border:none;margin-top:0}
+.thanks ul{list-style:none;padding:0}
+.thanks li{padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.92rem}
+.thanks li:last-child{border:none}
+.thanks a{color:var(--accent);text-decoration:none}
+.thanks a:hover{text-decoration:underline}
+footer{text-align:center;color:var(--muted);font-size:.85rem;padding:2.5rem 0 3rem}
+a{color:var(--accent)}
+.btn{display:inline-block;background:#238636;color:#fff;border-radius:7px;padding:.6rem 1.2rem;text-decoration:none;font-weight:600;margin-top:1.5rem}
+.btn.ghost{background:var(--card);border:1px solid var(--border);color:var(--text);margin-left:.5rem}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Universal Head Swap</h1>
+  <p class="tagline">One extension. Two models. FLUX.2 Klein 4B/9B &amp; Qwen Image Edit 2.1 — auto-switched.</p>
+  <div class="badges">
+    <span class="badge"><b>v7.0.0-rc1</b></span>
+    <span class="badge">Forge Neo (classic)</span>
+    <span class="badge"><b>119</b> offline tests passing</span>
+    <span class="badge">NVIDIA · AMD ROCm · CPU</span>
+    <span class="badge">MIT</span>
+  </div>
+  <a class="btn" href="https://github.com/"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-3px;margin-right:6px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>Star on GitHub</a>
+  <a class="btn ghost" href="#install">Install</a>
+</header>
+
+<main class="wrap">
+
+<section class="grid">
+  <div class="card"><div class="icon">🔁</div><h3>Auto model switching</h3><p>Select the checkpoint in Forge's dropdown — Klein or Qwen 2.1 — and the extension switches its reference plumbing, LoRA matching and prompt formatting automatically. No manual mode toggle.</p></div>
+  <div class="card"><div class="icon">🎭</div><h3>BFS head swap</h3><p>Use the original picture as the body/scene reference and a selected headshot as the identity reference, powered by Alissonerdx's BFS (Best Face Swap) LoRAs.</p></div>
+  <div class="card"><div class="icon">🛡️</div><h3>Protected head edit</h3><p>Dedicated sampling canvas for the head region, composited back into the untouched original. Optional custom mask, feathering and crop padding.</p></div>
+  <div class="card"><div class="icon">🧼</div><h3>Whole-body cleanup</h3><p>Removal policies for tattoos, henna, body ink, piercings, earrings, jewelry, forehead marks and cross symbols — resolved in one deterministic prompt plan.</p></div>
+  <div class="card"><div class="icon">🔍</div><h3>Face-match auditing</h3><p>Local CPU comparison against the selected headshot with SFace embeddings, bounded background worker, review statuses and JSON export.</p></div>
+  <div class="card"><div class="icon">📐</div><h3>Proportions &amp; sharpness</h3><p>Preserve canvas aspect ratio, guide head/body scale, measured head-height correction with isotropic transform, and detail-matched sharpening.</p></div>
+  <div class="card"><div class="icon">⚡</div><h3>Any VRAM, any quant</h3><p>Project-Invisible memory policy: device-aware probing (never assumes GPU 0), bounded reference budgets, OOM retry, RAM-backed encode cache, all modern quantization formats via Forge's own loaders.</p></div>
+  <div class="card"><div class="icon">🧩</div><h3>Zero core edits</h3><p>Hook-only Forge integration via a scoped, removable bridge. Delete the extension folder and Forge is 100% stock. Every hook forwards <code>*args/**kwargs</code>.</p></div>
+</section>
+
+<h2>How auto-switching works</h2>
+<table>
+  <tr><th></th><th>FLUX.2 Klein 4B / 9B</th><th>Qwen Image Edit 2.1</th></tr>
+  <tr><td>Detection</td><td><code>dynamic_args.klein</code> + hidden_size (3072→4B, 4096→9B)</td><td><code>dynamic_args.edit</code> + Qwen text engine</td></tr>
+  <tr><td>Reference path</td><td>VAE latents in <code>model.ref_latents</code></td><td>Pixel-space start image + vision-token prompts</td></tr>
+  <tr><td>Prompt numbering</td><td>Picture 1 = target, Picture 2 = headshot</td><td>Auto-remapped (Picture 0 = target, prepended by Forge)</td></tr>
+  <tr><td>Adapters</td><td>Klein-family BFS LoRAs, size-matched</td><td>Qwen-family BFS + character LoRAs, family-locked</td></tr>
+  <tr><td>Latent sharpening</td><td>Supported</td><td>Skipped (pixel-space path)</td></tr>
+</table>
+<p class="note">Everything else — removal policies, protected editing, face audit, presets, fine-grid cleanup, quality gates — is identical in both modes.</p>
+
+<h2 id="install">Install</h2>
+<pre><code>cd &lt;forge&gt;/extensions
+git clone https://github.com/YOUR-USERNAME/universal-head-swap
+</code></pre>
+<ol>
+  <li>Load a Klein 4B/9B or Qwen Image Edit 2.1 checkpoint and its matching BFS LoRA.</li>
+  <li>Open <b>img2img</b>, upload the body/scene target, enable <b>Universal Head Swap</b> in the accordion.</li>
+  <li>Upload 1–20 sharp identity headshots.</li>
+  <li>Leave the adapter on <b>Auto (match model)</b>, denoising at the BFS start value (1.0), pick a fixed seed, click <b>Check setup</b>.</li>
+  <li>Generate with Forge's normal <b>Generate</b> button and inspect <b>Show last generation report</b>.</li>
+</ol>
+<p class="note">Optional face analysis: place <code>face_landmarker.task</code> at <code>scripts/models/</code> and install MediaPipe in Forge's own Python environment — see the full README for pinned URLs and hashes. No automatic downloads ever run.</p>
+
+<h2>Requirements</h2>
+<ul style="color:var(--muted)">
+  <li>Forge Neo (<a href="https://github.com/Haoming02/sd-webui-forge-classic/tree/neo">sd-webui-forge-classic, neo branch</a>) with Klein or Qwen-Image-Edit support</li>
+  <li>Checkpoint + <b>matching</b> BFS face/head-swap LoRA (Klein LoRAs do not interchange with Qwen — the extension enforces this)</li>
+  <li>Works on NVIDIA (CUDA), AMD (ROCm) and CPU; DirectML/Vulkan not implemented. FP8 acceleration probes skipped on ROCm; portable storage fallbacks used.</li>
+</ul>
+
+<h2>Testing</h2>
+<pre><code>python -m unittest discover -s tests -v
+# 119 tests, CPU-only, no Forge or GPU required
+</code></pre>
+
+<div class="thanks">
+  <h2>❤️ Special thanks</h2>
+  <ul>
+    <li><a href="https://www.reddit.com/r/sdforall/">r/sdforall</a> — Stable Diffusion community</li>
+    <li><a href="https://www.reddit.com/r/SECourses/">r/SECourses</a> — SECourses community</li>
+    <li><a href="https://www.reddit.com/r/malcolmrey/">r/malcolmrey</a> — community</li>
+    <li><a href="https://github.com/Haoming02/sd-webui-forge-classic/tree/neo">Haoming02 — sd-webui-forge-classic (neo)</a> — Forge Neo host with the Klein &amp; Qwen reference inference this extension builds on</li>
+    <li><a href="https://github.com/Adeliox/klein-head-swap">Adeliox — Klein Head Swap</a> — original extension (MIT), base of this build</li>
+    <li><a href="https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap">Alissonerdx — BFS (Best Face Swap)</a> — workflow and LoRAs</li>
+    <li>Project Invisible extensions — memory policy, GPU compatibility and extension philosophy</li>
+    <li>ComfyUI-DeGrid — Apache-2.0 fine-grid cleanup filter</li>
+    <li>Google MediaPipe — face landmarker and detector models</li>
+    <li>And everyone else in the Stable Diffusion and Forge communities whose workflows, bug reports and discussions contributed.</li>
+  </ul>
+</div>
+
+</main>
+<footer>Universal Head Swap 7.0.0-rc1 · MIT License · Not affiliated with Black Forest Labs or Alibaba · Inspect all outputs at 100% before accepting</footer>
+</body>
+</html>

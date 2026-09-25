@@ -1,0 +1,14 @@
+{
+  "negative_presets": {
+    "Natural detail": "blurry face, waxy skin, plastic skin, over-smoothed skin, distorted features, mismatched skin tone, floating head"
+  },
+  "hairstyles": ["Preserve the exact hairstyle and hair volume from Picture 1"],
+  "hair_color": ["dark brown"],
+  "makeup": ["natural makeup"],
+  "expressions": ["subtle smile"],
+  "lighting": ["preserve target lighting"],
+  "age": [],
+  "ethnicity": [],
+  "camera": [],
+  "earrings": ["no earrings", "small pearl earrings"]
+}

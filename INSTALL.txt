@@ -1,0 +1,33 @@
+Klein Head Swap Enhanced 6.0.0-rc5 — installation candidate
+
+Do not restart Forge or run tests while AI Toolkit is training.
+
+1. Back up the existing complete extension outside Forge's extensions folder.
+2. Copy the entire release into the existing extension folder, including khs/.
+   Updating only scripts/klein_face_reference.py is no longer sufficient.
+3. Preserve scripts/custom_data.json, scripts/headswap_presets.json and
+   scripts/models/face_landmarker.task. Do not replace personal JSON with
+   example files during an update.
+4. Keep only one active copy of the extension.
+5. Restart Forge after training and generation are idle. Confirm 6.0.0-rc5.
+6. Load a matching Klein model and BFS adapter. Use plain img2img with one
+   target and one or more reference headshots. Start with a fixed seed.
+7. For marks anywhere on the body, use Full image edit and Remove policies.
+   Protected head edit preserves pixels outside its mask, including any
+   tattoos or piercings there.
+8. Read VALIDATION.md and docs/TESTING.md before treating this build as stable.
+
+Optional detector: follow Google's Face Landmarker Python instructions linked
+in README.md and place face_landmarker.task under scripts/models/. No detector
+or Python dependencies are installed automatically.
+
+Rollback: close Forge when idle, move the candidate folder out of active
+extensions, and restore the complete backed-up folder. Keep a separate copy
+of any newer personal preset JSON before restoring the old one.
+
+The HDR-look control is 8-bit SDR tone mapping. It is not HDR10 or PQ output.
+Do not rename LoRA folders just because their paths contain spaces.
+For complete controls, reports, limits and troubleshooting, read README.md.
+
+FACE-MATCH CHECKER (rc3)
+The maintained source contains a pinned manifest and license notices. Binary models are separate. For a new installation, run tools/setup_identity_models.py explicitly with Forge's existing Python while idle. The local G: and D: copies receive verified models during this update. No package upgrade is required in the inspected environment. Default head-size checks no longer warp pixels; experimental resizing is opt-in.
