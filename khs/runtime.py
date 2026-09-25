@@ -230,10 +230,10 @@ class Session:
             self.model.ref_latents=[]; self.model.ini_latent=None; self.host.dynamic.ref_latents=[]
             self.owner.last_report.update(status='Cancelled',cancellation=self.cancelled,completed_outputs=len(self.completed))
             self.host.shared.state.textinfo='Klein: stopped; completed images retained.'
-            print('[KleinHeadSwap] Stopped during reference preparation; completed images retained.')
+            print('[UniversalHeadSwap] Stopped during reference preparation; completed images retained.')
             return
         if self.error: return  # Preserve the first error instead of wrapping/logging it twice.
-        self.error=f'Klein Head Swap: {type(e).__name__}: {e}'
+        self.error=f'Universal Head Swap: {type(e).__name__}: {e}'
         self.model.ref_latents=[]; self.model.ini_latent=None; self.host.dynamic.ref_latents=[]
         self.owner.last_report={**self.owner.last_report,'version':core.VERSION,'error':self.error,'analysis':self.analysis}
         self.host.shared.state.textinfo=self.error
@@ -261,8 +261,8 @@ class Session:
         self.set_p('cfg_scale',self.plans[0].cfg)
         active=self.plans[0].cfg!=1.0
         p.extra_generation_params['Klein negative guidance']='active' if active else 'inactive (CFG 1.0)'
-        print(f'[KleinHeadSwap] CFG {self.plans[0].cfg:g}; negative guidance '+('active' if active else 'OFF. Select Positive + Negative to use removal negatives.'))
-        p.extra_generation_params['Klein Head Swap']=f'{core.VERSION} | {cfg["edit_scope"]} | {self.fs}'
+        print(f'[UniversalHeadSwap] CFG {self.plans[0].cfg:g}; negative guidance '+('active' if active else 'OFF. Select Positive + Negative to use removal negatives.'))
+        p.extra_generation_params['Universal Head Swap']=f'{core.VERSION} | {cfg["edit_scope"]} | {self.fs}'
         p.extra_generation_params['Klein settings']=json.dumps({k:cfg[k] for k in core.SAVE_KEYS},ensure_ascii=False,separators=(',',':'))
         if self.region or self.canvas_box: p.extra_generation_params['Klein output size']=f'{self.original.width}x{self.original.height}'
     def _cancel_check(self):
@@ -285,7 +285,7 @@ class Session:
                 p.extra_generation_params['Klein face audit']=f'{ticket or "unavailable"}; advisory; open Face-match results for final scores'
             except Exception as e:
                 p.extra_generation_params['Klein face audit']='Could not verify: '+str(e)
-                print('[KleinHeadSwap] Face audit unavailable: '+str(e))
+                print('[UniversalHeadSwap] Face audit unavailable: '+str(e))
         info=self.processing.create_infotext(p,p.prompts,p.seeds,p.subseeds,index=int(getattr(p,'batch_index',0)),
                                             all_negative_prompts=p.negative_prompts)
         self.completed.append({'image':image,'info':info,'prompt':p.all_prompts[index],
@@ -296,12 +296,12 @@ class Session:
         result=self.processing.Processed(p,[x['image'] for x in done],
             seed=done[0]['seed'] if done else (p.all_seeds or [-1])[0],
             subseed=done[0]['subseed'] if done else (p.all_subseeds or [-1])[0],
-            info=done[0]['info'] if done else 'Klein Head Swap stopped before an image was completed.',
+            info=done[0]['info'] if done else 'Universal Head Swap stopped before an image was completed.',
             all_prompts=[x['prompt'] for x in done],all_negative_prompts=[x['negative'] for x in done],
             all_seeds=[x['seed'] for x in done],all_subseeds=[x['subseed'] for x in done],
             infotexts=[x['info'] for x in done],extra_images_list=getattr(p,'extra_result_images',[]))
         if self.region or self.canvas_box: result.width,result.height=self.original.size
-        result.comments=(getattr(result,'comments','') or '')+'\nKlein Head Swap: cancelled; completed outputs retained.'
+        result.comments=(getattr(result,'comments','') or '')+'\nUniversal Head Swap: cancelled; completed outputs retained.'
         if p.scripts is not None: p.scripts.postprocess(p,result)
         return result
     def _encode(self,im):
@@ -361,7 +361,7 @@ class Session:
                 oom=isinstance(e,h.torch.OutOfMemoryError) or 'out of memory' in str(e).lower()
                 if not oom or retries or max_side<=512: raise
                 retries+=1; self.cache.clear(); h.devices.torch_gc(); max_side=max(512,int(max_side*0.75)//64*64); budget*=0.6
-                print(f'[KleinHeadSwap] Reference encoding ran out of memory; retrying once at maximum side {max_side}.')
+                print(f'[UniversalHeadSwap] Reference encoding ran out of memory; retrying once at maximum side {max_side}.')
         amount=cfg['latent_sharpness']
         if amount>0 and self.family=='klein':
             import torch.nn.functional as F
@@ -391,7 +391,7 @@ class Session:
             'vae_encodes':self.encodes,'memory_retry':bool(retries),'crop_box':self.region.box if self.region else None}
         self.owner.last_report=report
         h.shared.state.textinfo=f'Klein: reference {selected+1}/{len(self.refs)}; {reason}; {self.hits} cached encodes reused'
-        print('[KleinHeadSwap] '+h.shared.state.textinfo)
+        print('[UniversalHeadSwap] '+h.shared.state.textinfo)
     def finish_image(self,image,index):
         cfg=self.cfg
         image=image.convert('RGB')
@@ -486,7 +486,7 @@ class Session:
         try:
             if (self.error or self.cancelled) and getattr(self.p,'extra_network_data',None) and not getattr(self.p,'disable_extra_networks',False):
                 try: self.host.extra_networks.deactivate(self.p,self.p.extra_network_data)
-                except Exception as e: print(f'[KleinHeadSwap] Adapter cleanup warning after failure: {e}')
+                except Exception as e: print(f'[UniversalHeadSwap] Adapter cleanup warning after failure: {e}')
         finally:
             if self.key is not None: setattr(self.host.shared.opts,self.key,self.old_option)
             self.model.ref_latents=self.old_refs; self.model.ini_latent=self.old_ini

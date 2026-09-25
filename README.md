@@ -1,4 +1,4 @@
-# Klein Head Swap Enhanced — 6.0.0-rc5
+# Universal Head Swap — 6.0.0-rc5
 
 Head swapping and appearance cleanup for **Forge Neo with FLUX.2 Klein**, using the original picture as the body/scene reference and a selected headshot as the identity reference. This edition rebuilds the Enhanced v5.4 implementation around explicit settings, scoped Forge integration, reproducible reference selection, and measurable output checks.
 
@@ -115,7 +115,7 @@ To roll back, close Forge when idle, move the candidate folder outside active `e
 
 1. Load the intended Klein checkpoint and its matching BFS LoRA in Forge's registry.
 2. Open **plain img2img** and upload the original body/scene image.
-3. Enable **Klein Head Swap** and upload one or more sharp identity headshots. Prefer similar pose and lighting, enough visible face pixels, and an unobstructed face.
+3. Enable **Universal Head Swap** and upload one or more sharp identity headshots. Prefer similar pose and lighting, enough visible face pixels, and an unobstructed face.
 4. Leave the adapter on **Auto (match model)** or select its canonical registry name. Start at strength **1.0**. Keep the main denoising strength near the BFS workflow's starting value of **1.0**, then tune from actual comparisons. [BFS model card](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap).
 5. Select **Full image edit** for tattoos or piercings elsewhere on the body. Leave the removal settings and **Removal priority** enabled. Keep original canvas, head-size checking and measured sharpening enabled initially. Keep experimental pixel resizing off to reduce hair/neck seam risk.
 6. Choose a fixed main seed. Click **Check setup**. Inspect the selected face/reference and resolved prompt. A random main seed (`-1`) produces a clearly labeled seed-0 preview example, not a prediction of the upcoming random seed.
@@ -338,7 +338,7 @@ There are no automatic model downloads, external telemetry, remote image uploads
 
 The source package excludes local model binaries, uploaded images, caches and personal JSON through `.gitignore`. The local GitHub source folder is a local copy; synchronizing files does not publish or push a GitHub repository.
 
-Based on [Adeliox's Klein Head Swap](https://github.com/Adeliox/klein-head-swap), under the retained [MIT license](LICENSE), and the owner's Enhanced v5.4 customizations. It uses [Alissonerdx's BFS workflow](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap), [Black Forest Labs' Klein models](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B), and [Forge Neo reference inference](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Inference-References). Model, LoRA and detector weights keep their own upstream licenses; the extension's MIT license does not relicense them.
+Based on [Adeliox's Universal Head Swap](https://github.com/Adeliox/klein-head-swap), under the retained [MIT license](LICENSE), and the owner's Enhanced v5.4 customizations. It uses [Alissonerdx's BFS workflow](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap), [Black Forest Labs' Klein models](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B), and [Forge Neo reference inference](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Inference-References). Model, LoRA and detector weights keep their own upstream licenses; the extension's MIT license does not relicense them.
 
 
 Third-party filter code is adapted from Apache-2.0 ComfyUI-DeGrid; see [license](docs/DEGRID_LICENSE.txt) and [source/modifications](docs/FINE_GRID.md). The repository MIT license does not replace that component license.
@@ -351,7 +351,7 @@ With gratitude to the communities and projects that made this extension possible
 - [r/SECourses](https://www.reddit.com/r/SECourses/) — SECourses community
 - [r/malcolmrey](https://www.reddit.com/r/malcolmrey/) — community
 - [Haoming02's sd-webui-forge-classic (neo branch)](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) — Forge Neo host providing the Klein and Qwen-Image-Edit reference inference this extension is built on
-- [Adeliox](https://github.com/Adeliox/klein-head-swap) — original Klein Head Swap
+- [Adeliox](https://github.com/Adeliox/klein-head-swap) — original Universal Head Swap
 - [Alissonerdx](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap) — BFS (Best Face Swap) workflow and LoRAs
 - [Project Invisible](https://github.com/) — memory policy, GPU compatibility and extension philosophy that guided this build
 - [ComfyUI-DeGrid](https://github.com/) — Apache-2.0 fine-grid cleanup filter

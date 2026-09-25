@@ -31,7 +31,7 @@ try:
 except Exception as e:
     HOST=None
     BRIDGE_ERROR=f'Forge bridge unavailable: {e}'
-    print('[KleinHeadSwap] '+BRIDGE_ERROR)
+    print('[UniversalHeadSwap] '+BRIDGE_ERROR)
 INSTANCES=[]
 def unload():
     for instance in INSTANCES:
@@ -41,7 +41,7 @@ def unload():
 script_callbacks.on_script_unloaded(unload)
 script_callbacks.on_before_image_saved(saving.protect_jpeg_metadata)
 
-class KleinFaceReference(scripts.Script):
+class UniversalHeadSwap(scripts.Script):
     sorting_priority=900
     def __init__(self):
         self.analyzer=FaceAnalyzer(ROOT/'scripts/models/face_landmarker.task')
@@ -49,7 +49,7 @@ class KleinFaceReference(scripts.Script):
         self.custom={}; self.custom_error=''; self.components={}; self.capture_target=False
         self.last_report={'version':core.VERSION,'status':'No generation in this session yet.'}
         try: self.custom=core.load_custom(ROOT/'scripts/custom_data.json')
-        except Exception as e: self.custom_error=str(e); print('[KleinHeadSwap] '+self.custom_error)
+        except Exception as e: self.custom_error=str(e); print('[UniversalHeadSwap] '+self.custom_error)
         self.choices=core.choices(self.custom); INSTANCES.append(self)
     def title(self): return 'Universal Head Swap'
     def show(self,is_img2img): return scripts.AlwaysVisible if is_img2img else False
@@ -72,7 +72,7 @@ class KleinFaceReference(scripts.Script):
         def text(key,label,**kw):
             C[key]=gr.Textbox(label=label,value=str(defaults[key] or ''),**kw); return C[key]
         try: names=list(runtime.registry()) if HOST else []
-        except Exception as e: names=[]; print(f'[KleinHeadSwap] Adapter list unavailable: {e}')
+        except Exception as e: names=[]; print(f'[UniversalHeadSwap] Adapter list unavailable: {e}')
         with InputAccordion(False,label=f'Universal Head Swap | {core.VERSION}') as C['enable']:
             gr.Markdown('Use your **img2img picture** as the target. Add identity headshots below, then use Forge’s **Generate** button.')
             if BRIDGE_ERROR:

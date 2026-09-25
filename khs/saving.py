@@ -27,4 +27,4 @@ def protect_jpeg_metadata(params):
     params.filename = str(path.with_name(path.stem + '-metadata-' + uuid4().hex + '.png'))
     note = 'Oversized JPEG generation metadata: saved lossless PNG with full metadata instead.'
     session.owner.last_report.setdefault('save_warnings', []).append(note)
-    print('[KleinHeadSwap] ' + note)
+    print('[UniversalHeadSwap] ' + note)

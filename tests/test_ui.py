@@ -33,7 +33,7 @@ class UIConstructionTests(unittest.TestCase):
             spec.loader.exec_module(ui)
             self.assertIsNone(ui.HOST)
             with gr.Blocks(analytics_enabled=False):
-                script=ui.KleinFaceReference()
+                script=ui.UniversalHeadSwap()
                 controls=script.ui(True)
                 self.assertEqual(len(controls),len(core.ARG_KEYS))
                 self.assertEqual(len({id(c) for c in controls}),len(controls))
