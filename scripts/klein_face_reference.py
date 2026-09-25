@@ -15,7 +15,7 @@ from modules.ui_components import InputAccordion
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path: sys.path.insert(0,str(ROOT))
-from khs import core, runtime, identity, saving
+from khs import core, runtime, saving
 from khs.vision import FaceAnalyzer
 
 HOST=None; BRIDGE=None; BRIDGE_ERROR=''
@@ -35,7 +35,7 @@ except Exception as e:
 INSTANCES=[]
 def unload():
     for instance in INSTANCES:
-        instance.analyzer.close(); instance.auditor.close()
+        instance.analyzer.close()
     if BRIDGE is not None and processing.process_images_inner is BRIDGE:
         processing.process_images_inner=BRIDGE._khs_original
 script_callbacks.on_script_unloaded(unload)
@@ -45,7 +45,6 @@ class UniversalHeadSwap(scripts.Script):
     sorting_priority=900
     def __init__(self):
         self.analyzer=FaceAnalyzer(ROOT/'scripts/models/face_landmarker.task')
-        self.auditor=identity.Auditor(ROOT/'scripts/models')
         self.custom={}; self.custom_error=''; self.components={}; self.capture_target=False
         self.last_report={'version':core.VERSION,'status':'No generation in this session yet.'}
         try: self.custom=core.load_custom(ROOT/'scripts/custom_data.json')
@@ -85,21 +84,9 @@ class UniversalHeadSwap(scripts.Script):
             with gr.Row():
                 check('geometry_match','Check original head size and position')
                 check('match_sharpness','Match original face detail')
-                check('identity_check','Check face match in the background')
             with gr.Row():
                 analyze=gr.Button('Check setup',variant='primary')
                 edit_mask=gr.Button('Edit head mask',visible=False)
-                audit_button=gr.Button('Face-match results')
-            with gr.Accordion('Face-match results · advisory',open=False) as audit_section:
-                audit_status=gr.Markdown(self.auditor.availability()+' Results appear after each check; refresh while generating.')
-                audit_table=gr.Dataframe(headers=['Image','Seed','Target ID','Reference','Selected similarity','Best similarity',
-                    'Median similarity','Face height change','Status','Notes'],datatype=['number','str','str','number','str','str','str','str','str','str'],
-                    value=[],interactive=False,wrap=True)
-                audit_refresh=gr.Button('Refresh results',size='sm')
-                with gr.Accordion('Detailed scores and export',open=False):
-                    audit_json=gr.JSON(label='Per-reference scores, width/area and position measurements')
-                    audit_export=gr.Button('Export report',size='sm')
-                    audit_file=gr.File(label='Face-match report',interactive=False)
             C['ratio_status']=gr.Textbox(label='Setup status',value='Add headshots, then check the selected reference and edit area.',interactive=False,lines=1)
             with gr.Accordion('Setup preview',open=False) as preview_section:
                 with gr.Row():
@@ -167,11 +154,6 @@ class UniversalHeadSwap(scripts.Script):
                             check('auto_adapt','Allow more reference detail for small heads')
                         gr.Markdown('Limits cover both references. Sampling memory also depends on the main Forge image size.')
                     with gr.Tab('Detail',id='detail'):
-                        with gr.Accordion('Face-match settings',open=False):
-                            slide('identity_threshold','Review threshold · similarity, not accuracy',0,1,0.001)
-                            gr.Markdown('Advisory only: weak outputs are flagged, not rejected. 0.363 is an OpenCV benchmark starting point; calibrate using your photos. '
-                                'All headshots should show the same person. A high best score cannot override weak selected/median agreement. '
-                                'CPU checks may overlap the next generation and add overhead. No automatic retries.')
                         check('keep_original_canvas','Return original dimensions and aspect ratio')
                         with gr.Row():
                             check('ratio_lock','Also guide original head scale in the prompt')
@@ -231,21 +213,6 @@ class UniversalHeadSwap(scripts.Script):
             for key in core.ARG_KEYS:
                 if key not in C: C[key]=gr.Checkbox(value=bool(defaults.get(key)),visible=False,label='Legacy '+key)
             all_inputs=[C[k] for k in core.ARG_KEYS]; save_inputs=[C[k] for k in core.SAVE_KEYS]
-            def show_audits():
-                records=self.auditor.snapshot()
-                pending=sum(r['status']=='Pending' for r in records)
-                message=f'{len(records)} recent outputs · {pending} pending. Scores are similarity measurements, not identity probabilities. '+self.auditor.availability()
-                return identity.table(records),{'outputs':records},message,gr.update(open=True)
-            for button in (audit_button,audit_refresh):
-                button.click(show_audits,outputs=[audit_table,audit_json,audit_status,audit_section],queue=False)
-            def export_audits():
-                import tempfile
-                records=self.auditor.snapshot()
-                directory=ROOT/'outputs/identity-audits'; directory.mkdir(parents=True,exist_ok=True)
-                with tempfile.NamedTemporaryFile(mode='w',suffix='.json',prefix='face-match-',dir=directory,encoding='utf-8',delete=False) as handle:
-                    json.dump({'version':core.VERSION,'advisory_only':True,'outputs':records},handle,ensure_ascii=False,indent=2)
-                    return handle.name
-            audit_export.click(export_audits,outputs=audit_file,queue=False)
             policy_keys=['ban_'+k for k in core.APPEARANCE]
             def summarize(scope,channel,*policies):
                 removed=[labels[key] for key,value in zip(core.APPEARANCE,policies) if value=='Remove']

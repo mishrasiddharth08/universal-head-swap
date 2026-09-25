@@ -9,7 +9,7 @@ import time
 import numpy as np
 from PIL import Image, ImageFilter
 
-from . import core, identity
+from . import core
 
 class GenerationCancelled(Exception):
     """A requested stop, distinct from encoding and quality failures."""
@@ -135,7 +135,7 @@ class Session:
         self.cache=core.BoundedCache(); self.hits=0; self.encodes=0
         self.snap={}; self.region=None; self.plans=[]; self.analysis={}; self.start=time.perf_counter()
         self.canvas_box=None; self.canvas_size=None; self.quality_history=[]
-        self.audit_inputs=None; self.selected_ref=None
+        self.selected_ref=None
         self.original=core.rgb_image(p.init_images[0]); self.refs,self.labels=core.gallery_images(cfg['headshots'])
         self.fs,self.char=resolve_adapters(cfg,self.model,self.family)
         entries=registry(); self.owned_aliases=[getattr(entries[n],'alias','') for n in (self.fs,self.char) if n in entries]
@@ -167,8 +167,6 @@ class Session:
         face_index=cfg['target_face']-1
         if target_faces and face_index>=len(target_faces): raise ValueError(f'Target face {face_index+1} not found; detected {len(target_faces)}.')
         self.target_pose=target_faces[face_index] if target_faces else None
-        if cfg.get('identity_check') and getattr(self.owner,'auditor',None) is not None:
-            self.audit_inputs=(identity.sample(self.original,self.target_pose),[identity.sample(ref) for ref in self.refs])
         self.poses=[]
         for ref in self.refs:
             fs=self.owner.analyzer.faces(ref); self.poses.append(fs[0] if fs else None)
@@ -272,20 +270,6 @@ class Session:
     def record_output(self,image,index):
         """Retain final callback outputs for a graceful stop between reference encodes."""
         p=self.p
-        if self.audit_inputs is not None:
-            try:
-                target,refs=self.audit_inputs
-                expected=core.scale_pose(self.target_pose,self.original.size,image.size)
-                ticket=self.owner.auditor.submit(target,identity.sample(image,expected),refs,
-                    self.selected_ref if self.selected_ref is not None else -1,self.cfg['identity_threshold'],
-                    {'version':core.VERSION,'image':index+1,'seed':int(p.all_seeds[index]),
-                     'target':target.fingerprint[:12],'output':core.image_hash(image)[:12],
-                     'references':[r.fingerprint[:12] for r in refs]},
-                    cancel=lambda:bool(getattr(self.host.shared.state,'interrupted',False)))
-                p.extra_generation_params['Klein face audit']=f'{ticket or "unavailable"}; advisory; open Face-match results for final scores'
-            except Exception as e:
-                p.extra_generation_params['Klein face audit']='Could not verify: '+str(e)
-                print('[UniversalHeadSwap] Face audit unavailable: '+str(e))
         info=self.processing.create_infotext(p,p.prompts,p.seeds,p.subseeds,index=int(getattr(p,'batch_index',0)),
                                             all_negative_prompts=p.negative_prompts)
         self.completed.append({'image':image,'info':info,'prompt':p.all_prompts[index],
@@ -493,7 +477,6 @@ class Session:
             self.host.dynamic.ref_latents=self.old_dynamic; self.host.dynamic.is_referencing=self.old_referencing
             if self.old_edit is not None: self.host.dynamic.edit=self.old_edit
             self.cache.clear()
-            self.audit_inputs=None
             for key,(exists,value) in self.snap.items():
                 if exists: setattr(self.p,key,value)
                 elif hasattr(self.p,key): delattr(self.p,key)

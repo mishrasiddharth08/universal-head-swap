@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Universal Head Swap — Forge Neo extension for FLUX.2 Klein &amp; Qwen Image Edit 2.1</title>
-<meta name="description" content="One extension, two models. BFS head swapping for FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 in Forge Neo — auto mode switching, protected head editing, face-match auditing, memory-efficient on any GPU.">
+<meta name="description" content="One extension, two models. BFS head swapping for FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 in Forge Neo — auto mode switching, protected head editing, memory-efficient on any GPU.">
 <style>
 :root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--purple:#bc8cff}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -66,7 +66,7 @@ a{color:var(--accent)}
   <div class="card"><div class="icon">🎭</div><h3>BFS head swap</h3><p>Use the original picture as the body/scene reference and a selected headshot as the identity reference, powered by Alissonerdx's BFS (Best Face Swap) LoRAs.</p></div>
   <div class="card"><div class="icon">🛡️</div><h3>Protected head edit</h3><p>Dedicated sampling canvas for the head region, composited back into the untouched original. Optional custom mask, feathering and crop padding.</p></div>
   <div class="card"><div class="icon">🧼</div><h3>Whole-body cleanup</h3><p>Removal policies for tattoos, henna, body ink, piercings, earrings, jewelry, forehead marks and cross symbols — resolved in one deterministic prompt plan.</p></div>
-  <div class="card"><div class="icon">🔍</div><h3>Face-match auditing</h3><p>Local CPU comparison against the selected headshot with SFace embeddings, bounded background worker, review statuses and JSON export.</p></div>
+  <div class="card"><div class="icon">🔍</div><h3>Proportions &amp; sharpness</h3><p>Preserve canvas aspect ratio, guide head/body scale, measured head-height correction, and detail-matched sharpening. Verify identity visually at 100% zoom.</p></div>
   <div class="card"><div class="icon">📐</div><h3>Proportions &amp; sharpness</h3><p>Preserve canvas aspect ratio, guide head/body scale, measured head-height correction with isotropic transform, and detail-matched sharpening.</p></div>
   <div class="card"><div class="icon">⚡</div><h3>Any VRAM, any quant</h3><p>Project-Invisible memory policy: device-aware probing (never assumes GPU 0), bounded reference budgets, OOM retry, RAM-backed encode cache, all modern quantization formats via Forge's own loaders.</p></div>
   <div class="card"><div class="icon">🧩</div><h3>Zero core edits</h3><p>Hook-only Forge integration via a scoped, removable bridge. Delete the extension folder and Forge is 100% stock. Every hook forwards <code>*args/**kwargs</code>.</p></div>

@@ -109,24 +109,6 @@ class RuntimeTests(unittest.TestCase):
         self.assertIs(session.completed[0]['image'],final)
         self.assertEqual(session.completed[0]['info'],'final metadata')
         self.assertEqual(session.completed[0]['seed'],12)
-    def test_audit_uses_final_image_and_writes_ticket_before_metadata(self):
-        from khs import identity
-        model,host,p,owner,cfg=self.fixtures(); session=self.session(p,cfg,owner,host)
-        p.prompts=p.all_prompts=['resolved']; p.negative_prompts=p.all_negative_prompts=['negative']
-        p.seeds=p.all_seeds=[12]; p.subseeds=p.all_subseeds=[8]; p.batch_index=0; p.extra_generation_params={}
-        session.target_pose=None; session.selected_ref=0
-        item=identity.sample(Image.new('RGB',(50,50),'red')); session.audit_inputs=(item,[item])
-        calls=[]
-        def submit(*args,**kw):calls.append(args); return 'audit-ticket'
-        owner.auditor=NS(submit=submit)
-        session.processing=NS(create_infotext=lambda *a,**kw:p.extra_generation_params['Klein face audit'])
-        final=Image.new('RGB',(50,50),'green')
-        pp=NS(image=Image.new('RGB',(50,50),'black'),index=0)
-        def finish(p,pp):pp.image=final
-        runtime.ScriptGuard(NS(postprocess_image_after_composite=finish),session).postprocess_image_after_composite(p,pp)
-        self.assertEqual(calls[0][1].image.getpixel((0,0)),final.getpixel((0,0)))
-        self.assertEqual(calls[0][3],0)
-        self.assertIn('audit-ticket',session.completed[0]['info'])
     def test_default_size_check_does_not_warp_finished_pixels(self):
         model,host,p,owner,cfg=self.fixtures(); cfg['match_sharpness']=False
         session=self.session(p,cfg,owner,host); session.target_pose={'box':(50,50,150,150),'head_h':100,'head_w':100}

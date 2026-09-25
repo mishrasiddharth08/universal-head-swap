@@ -1,35 +1,17 @@
 # Universal Head Swap
 
-Head swapping and appearance cleanup for **Forge Neo with FLUX.2 Klein**, using the original picture as the body/scene reference and a selected headshot as the identity reference. This edition rebuilds the Enhanced v5.4 implementation around explicit settings, scoped Forge integration, reproducible reference selection, and measurable output checks.
+BFS head swapping and appearance cleanup for **Forge Neo**, using the original picture as the body/scene reference and a selected headshot as the identity reference. One extension serves **FLUX.2 Klein 4B/9B** and **Qwen Image Edit 2.1** — switch the checkpoint and the extension auto-switches with it.
 
-**Release status: candidate; 104 offline tests passed with zero failures/skips.** Real local recognition-model smoke tests also passed five cases. The new checker has been exercised on the owner's existing rc2 outputs; those are not newly generated rc3 acceptance images. Live Forge browser/cancellation behavior, calibrated identity thresholds and improved generation quality still require validation. No Forge restart, diffusion generation or dependency upgrade was performed for this update. See [validation status](VALIDATION.md), [face-match auditing](docs/IDENTITY.md) and [the test procedure](docs/TESTING.md).
+## Latest update
 
-## Optional fine-grid cleanup (rc5)
+- **Dual-model engine:** FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 in one extension. The loaded checkpoint decides the mode — no manual toggle.
+- **Full feature set on both models:** protected head edit, removal policies, presets, fine-grid cleanup and quality gates work identically on Klein and Qwen.
+- **Family-locked adapters:** Klein and Qwen BFS/character LoRAs can never cross-load; auto-match works in both modes.
+- **Face-match auditing removed:** the advisory audit panel, models and background checks are gone. Verify identity visually at 100% zoom.
+- **Project Invisible memory policy:** device-aware probing, bounded reference budgets, OOM retry, encode caching. NVIDIA, AMD ROCm and CPU.
+- **Cleaner panel:** dedicated **Adapters** and **Memory** tabs in More options.
 
-Under **More options → Detail → Fine-grid cleanup**, enable **Automatically reduce fine 2-pixel grids** when needed. Start at the default 0.5 strength and compare at 100% zoom. It is off by default. Adapted from ComfyUI-DeGrid, this CPU filter detects repeating two-pixel grids, skips clean images and limits correction; it can still soften real repeating texture and does not remove tattoos or piercings. Protected edits keep this filter inside the edit mask. No model downloads or dependency changes. See [filter details](docs/FINE_GRID.md).
-
-## rc4 batch-saving repair
-
-The supplied September 12 log ends with `'H' format requires 0 <= number <= 65535` while Forge writes a JPEG grid. JPEG EXIF uses a two-byte segment length; long generation details can exceed its limit. This is a metadata-saving failure, not evidence of a GPU out-of-memory failure.
-
-While a Klein session is active, a save callback calculates the same Unicode EXIF payload as Forge. If it exceeds the JPEG segment limit, that individual image/grid is saved as a lossless PNG with the full generation details and a unique `-metadata-` filename suffix. Normal JPEG saves, metadata-disabled saves and other extensions' independent generations retain their chosen format. The report and console explain the fallback. Global output settings are not changed. Optional Forge secondary JPEG exports may still report their own handled warning; the primary PNG remains saved.
-
-Folder batches reuse the processing request. AutoNeg can write expanded negative text back into it; Klein now restores the original prompt and negative prompt at the end of each target, including list inputs and failure/cancellation cleanup. Existing saved presets and manually entered repeated words are not rewritten. Already-running sessions need an idle Forge restart to load this code.
-
-The earlier head-boundary fix is retained: automatic sharpening does not stop at a head-shaped ellipse, and manual sharpening, tone mapping and grain run after compositing. These optional full-frame effects can change pixels outside a protected mask; leave them off when exact outside-mask preservation matters. This reduces a known artificial transition but is not proof that every generated hairline or neck seam is resolved.
-
-Validation: 104 CPU tests passed, plus an isolated call to the installed Forge saving function preserved full oversized metadata and pixels. Fresh generation and live UI acceptance remain pending. The same log also contains separate Ideogram text-to-image-only model errors from an img2img request; this Klein repair does not add an img2img path to that model.
-
-## What this version is designed to improve
-
-- **Whole-body cleanup:** removal instructions cover tattoos, henna, body ink and remnants; piercings on all visible body regions; earrings and other jewelry; forehead sindoor, bindi, tikka, tilak, kumkum and related marks; and cross symbols. The original negative vocabulary is retained in a dedicated catalog.
-- **Face-match auditing:** local CPU comparison against the selected headshot and full usable reference set, with a bounded background worker, explicit review statuses and JSON export.
-- **Original proportions:** preserve the canvas aspect ratio, guide original head/body scale, associate the generated face with the selected target, and optionally correct measured face height and position with an isotropic transform.
-- **Sharper faces:** compare original and generated face-region detail, apply bounded uniform sharpening only when needed, and report the result. Protected editing dedicates the sampling canvas to the head region and composites it into the original image.
-- **Predictable prompts:** preserve user text, Unicode and unrelated LoRA tags; resolve appearance conflicts in one place; use the same planner for preview and generation; keep randomized choices tied to the image seed.
-- **More reliable execution:** match 4B/9B adapters, handle old/new Forge reference options, cap both reference images, cache unchanged VAE encodes within a job, stop on preparation failure, and restore owned state in `finally`.
-
-These are implementation features, **not a guarantee of perfect identity, complete removal, or recovered photographic detail**. A local contrast score cannot certify perceptual sharpness. The face detector does not detect tattoos, piercings or jewelry. Inspect final pictures at 100% before accepting them.
+Full details in the [dated update history](CHANGELOG.md). 118 offline tests pass — restart Forge after updating.
 
 ## Contents
 
@@ -46,6 +28,7 @@ These are implementation features, **not a guarantee of perfect identity, comple
 11. [Files, development and credits](#files-development-and-credits)
 
 ## Compatibility and requirements
+
 
 The implementation targets **Forge Neo's native Klein reference-image path**, not generic Stable Diffusion img2img. The source inspected for this update was Forge Neo commit `efc42fe03739d0d8cda7de6e7bed2f8c1969a0c7`. Inspected local packages: Python 3.13.12, Gradio 4.40.0, Pillow 12.3.0, NumPy 2.3.5, MediaPipe 1.0.1 and Torch 2.13.0+cu130. These are an inspected environment, not a completed compatibility certification.
 
@@ -263,7 +246,7 @@ Existing presets may restore Preserve settings or old adapter names. Review all 
 | Head-scale wording | On, neck match | Request original scale and neck/shoulder junction |
 | Head-size checking | On | Measure corresponding face without warping pixels |
 | Experimental pixel resizing | Off | Limited post-generation transformation; may affect seams |
-| Background face-match check | On | Advisory selected/best/median reference similarity and size report |
+| Background face-match check | Removed | The audit feature was removed; verify identity visually at 100% zoom |
 | Similarity review threshold | 0.363 | Benchmark starting point; not an accuracy percentage |
 | Reference framing | Head crop | Preserve contextual hair and neck around the identity face |
 | Instruction strength / order | 50 / extension first | Weighted instruction placement; not a visual blending ratio |
@@ -288,10 +271,6 @@ Existing presets may restore Preserve settings or old adapter names. Review all 
 | HDR-look / manual sharpness / grain / blur | Off / 0 / 0 / 0 | Optional finishing effects |
 
 The “HDR-look” option is an **8-bit SDR tone-mapping effect**, not HDR10 mastering or a PQ/10-bit export. Background blur protects an estimated head ellipse in full-image mode; it does not segment the whole body. These labels replace inaccurate older HDR10 and background-segmentation claims.
-
-## Face-match results
-
-Enable **Check face match in the background** and open **Face-match results**. Refresh to see selected-reference, best and median similarity, size deviation and clear review notes. All processing stays local. The latest 300 results span folder-batch targets in the current instance; export them before restarting if needed. The advisory checker does not reject, overwrite or retry pictures. Its threshold and limitations are documented in [Face-match auditing](docs/IDENTITY.md). High agreement is a useful indicator, not proof of identity or image quality.
 
 ## Reports and troubleshooting
 
@@ -334,7 +313,7 @@ Batch size is serialized to one image at a time while retaining the requested ou
 | `docs/ARCHITECTURE.md` | Integration order, owned state and design limits |
 | `docs/TESTING.md` | Regression, UI and real-generation acceptance procedure |
 
-There are no automatic model downloads, external telemetry, remote image uploads, attention-kernel replacements or Forge core-file edits. Optional face-match model setup is explicit through `tools/setup_identity_models.py`, with pinned URLs and verified hashes. It uses Forge's existing model and LoRA infrastructure. API clients using positional script arguments retain the first 70 legacy positions; new fields are appended. Old dead controls remain inert compatibility slots; consult `core.ARG_KEYS` and `core.DEFAULTS` rather than guessing an argument order.
+There are no automatic model downloads, external telemetry, remote image uploads, attention-kernel replacements or Forge core-file edits. API clients using positional script arguments retain the first 70 legacy positions; new fields are appended. Old dead controls remain inert compatibility slots; consult `core.ARG_KEYS` and `core.DEFAULTS` rather than guessing an argument order.
 
 The source package excludes local model binaries, uploaded images, caches and personal JSON through `.gitignore`. The local GitHub source folder is a local copy; synchronizing files does not publish or push a GitHub repository.
 
