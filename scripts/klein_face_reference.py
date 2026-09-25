@@ -143,29 +143,29 @@ class UniversalHeadSwap(scripts.Script):
                         with gr.Row():
                             slide('target_face','Target face · largest first',1,20,1)
                             drop('reference_framing','Reference framing',['Head crop (recommended)','Unmodified reference','Match target framing (experimental)'])
-                        with gr.Accordion('Face-swap and character adapters',open=False):
-                            with gr.Row():
-                                drop('lora_dropdown','Face-swap adapter',['Auto (match model)']+names)
-                                slide('lora_strength','Adapter strength',0.05,2,0.05)
-                            with gr.Row():
-                                drop('char_lora_name','Character adapter',['None (skip)']+names)
-                                slide('char_lora_strength','Character strength',-2,2,0.05)
-                            text('char_lora_trigger','Character trigger')
-                            check('strict_adapter','Check face-swap adapter compatibility')
-                            refresh=gr.Button('Refresh adapter list',size='sm')
-                            gr.Markdown('Auto matches a registered BFS adapter to the loaded model: Klein 4B/9B or Qwen Image Edit.')
-                        with gr.Accordion('Memory and selection tuning',open=False):
-                            with gr.Row():
-                                drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
-                                slide('reference_budget','Combined reference budget · megapixels',0.5,8,0.25)
-                            with gr.Row():
-                                check('auto_pick_best','Score references automatically')
-                                check('rotate_top_only','Rotate only good matches')
-                            with gr.Row():
-                                check('cache_encodes','Reuse unchanged encodings')
-                                check('auto_adapt','Allow more reference detail for small heads')
-                            check('seed_lock','Reuse the first seed for this target')
-                            gr.Markdown('Limits cover both references. Sampling memory also depends on the main Forge image size.')
+                        with gr.Row():
+                            check('auto_pick_best','Score references automatically')
+                            check('rotate_top_only','Rotate only good matches')
+                        check('seed_lock','Reuse the first seed for this target')
+                    with gr.Tab('Adapters',id='adapters'):
+                        with gr.Row():
+                            drop('lora_dropdown','Face-swap adapter',['Auto (match model)']+names)
+                            slide('lora_strength','Adapter strength',0.05,2,0.05)
+                        with gr.Row():
+                            drop('char_lora_name','Character adapter',['None (skip)']+names)
+                            slide('char_lora_strength','Character strength',-2,2,0.05)
+                        text('char_lora_trigger','Character trigger')
+                        check('strict_adapter','Check face-swap adapter compatibility')
+                        refresh=gr.Button('Refresh adapter list',size='sm')
+                        gr.Markdown('Auto matches a registered BFS adapter to the loaded model: Klein 4B/9B or Qwen Image Edit.')
+                    with gr.Tab('Memory',id='memory'):
+                        with gr.Row():
+                            drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
+                            slide('reference_budget','Combined reference budget · megapixels',0.5,8,0.25)
+                        with gr.Row():
+                            check('cache_encodes','Reuse unchanged encodings')
+                            check('auto_adapt','Allow more reference detail for small heads')
+                        gr.Markdown('Limits cover both references. Sampling memory also depends on the main Forge image size.')
                     with gr.Tab('Detail',id='detail'):
                         with gr.Accordion('Face-match settings',open=False):
                             slide('identity_threshold','Review threshold · similarity, not accuracy',0,1,0.001)
