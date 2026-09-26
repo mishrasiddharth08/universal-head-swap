@@ -51,7 +51,7 @@ a{color:var(--accent)}
   <div class="badges">
     <span class="badge"><b>v1.0</b></span>
     <span class="badge">Forge Neo (classic)</span>
-    <span class="badge"><b>119</b> offline tests passing</span>
+    <span class="badge"><b>128</b> offline tests passing</span>
     <span class="badge">NVIDIA · AMD ROCm · CPU</span>
     <span class="badge">MIT</span>
   </div>
@@ -75,7 +75,7 @@ a{color:var(--accent)}
 <h2>How auto-switching works</h2>
 <table>
   <tr><th></th><th>FLUX.2 Klein 4B / 9B</th><th>Qwen Image Edit 2.1</th></tr>
-  <tr><td>Detection</td><td><code>dynamic_args.klein</code> + hidden_size (3072→4B, 4096→9B)</td><td><code>dynamic_args.edit</code> + Qwen text engine</td></tr>
+  <tr><td>Detection</td><td><code>dynamic_args.klein</code> + hidden_size (3072→4B, 4096→9B)</td><td>Dedicated Project Invisible Qwen 2.1 bridge; native Qwen uses its engine state</td></tr>
   <tr><td>Reference path</td><td>VAE latents in <code>model.ref_latents</code></td><td>Pixel-space start image + vision-token prompts</td></tr>
   <tr><td>Prompt numbering</td><td>Picture 1 = target, Picture 2 = headshot</td><td>Auto-remapped (Picture 0 = target, prepended by Forge)</td></tr>
   <tr><td>Adapters</td><td>Klein-family BFS LoRAs, size-matched</td><td>Qwen-family BFS + character LoRAs, family-locked</td></tr>
@@ -99,7 +99,7 @@ a{color:var(--accent)}
 
 <h2 id="install">Install</h2>
 <pre><code>cd &lt;forge&gt;/extensions
-git clone https://github.com/YOUR-USERNAME/universal-head-swap
+git clone https://github.com/mishrasiddharth08/universal-head-swap
 </code></pre>
 <ol>
   <li>Load a Klein 4B/9B or Qwen Image Edit 2.1 checkpoint and its matching BFS LoRA.</li>
@@ -117,11 +117,14 @@ git clone https://github.com/YOUR-USERNAME/universal-head-swap
   <li>Works on NVIDIA (CUDA), AMD (ROCm) and CPU; DirectML/Vulkan not implemented. FP8 acceleration probes skipped on ROCm; portable storage fallbacks used.</li>
 </ul>
 
+<h2>Companion requirement</h2><p>For Project Invisible Qwen 2.1, update both extensions and restart Forge. Older companion engines bypass Head Swap callbacks. <a href="docs/QWEN21_INTEGRATION.md">Integration details</a>.</p>
 <h2>Testing</h2>
 <pre><code>python -m unittest discover -s tests -v
-# 119 tests, CPU-only, no Forge or GPU required
+# CPU regression tests; actual model generation must also be checked
 </code></pre>
 
+<section><h2>Runtime update · September 26, 2026</h2><p>Automatic adapter matching follows the loaded Klein 4B, Klein 9B or Qwen Image Edit model when Auto is selected. Qwen references now preserve their original colors and remain on CPU until needed. Quantization and model offloading follow Forge. Qwen INT8 ConvRot was subsequently GPU-tested with BFS, character and Turbo LoRAs; other combinations remain unverified.</p></section>
+<section><h2>Dedicated Qwen 2.1 integration</h2><p>Head Swap now connects directly to the Project Invisible Qwen 2.1 engine. Automatic selection follows preset and checkpoint changes, including BFS adapters in subfolders. Your headshots form a selection pool; each output uses its target and chosen headshot. BFS, a character LoRA and Viggle Turbo were tested together on INT8 ConvRot. Protected-head mode preserves the surrounding picture, and completed files report their saved location.</p><p>Restart Forge after updating both extensions. Other quantizations and actual Klein generation still need individual GPU validation; face-match checks remain advisory.</p></section>
 <div class="thanks">
   <h2>❤️ Special thanks</h2>
   <ul>

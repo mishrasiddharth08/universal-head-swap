@@ -31,15 +31,16 @@ def model_family(model,host):
     dynamic_args.edit (set by Forge's loader for Qwen-Image-Edit checkpoints)
     plus the diffusion engine class; Klein from dynamic_args.klein.
     """
+    # Loaded architecture wins over mutable flags left by UI presets.
+    config_name=type(getattr(model,'model_config',None)).__name__.lower()
+    engine_name=type(model).__name__.lower()
+    if getattr(model,'text_processing_engine_qwen',None) is not None:
+        if getattr(host.dynamic,'edit',False): return 'qwen',None
+        return None,None
+    if engine_name=='flux2' or 'flux2k' in config_name:
+        return 'klein',model_size(model)
     if getattr(host.dynamic,'klein',False):
         return 'klein',model_size(model)
-    engine=getattr(model,'text_processing_engine_qwen',None)
-    edit=getattr(host.dynamic,'edit',False)
-    if engine is not None and (edit or getattr(model,'is_wan',False)):
-        return 'qwen',None
-    if engine is not None:
-        # Qwen engine present without the edit flag: still a Qwen trunk.
-        return 'qwen',None
     return None,None
 
 def device_policy(host):
@@ -72,7 +73,7 @@ def registry():
 def resolve_adapters(cfg,model,family='klein'):
     entries=registry(); size=model_size(model) if family=='klein' else None
     wanted=cfg['lora_dropdown']
-    if wanted in ('Auto (match model)','None',None,''):
+    if cfg.get('auto_model_adapter',True) or wanted in ('Auto (match model)','None',None,''):
         wanted=core.select_adapter({k:v.metadata for k,v in entries.items()},size,family)
     def lookup(name,strict):
         name=core.clean_name(name)
@@ -125,12 +126,12 @@ class ScriptGuard:
     def __setattr__(self,name,value): setattr(self._runner,name,value)
 
 class Session:
-    def __init__(self,p,cfg,owner,host):
-        self.p=p; self.cfg=cfg; self.owner=owner; self.host=host; self.model=p.sd_model
+    def __init__(self,p,cfg,owner,host,model=None):
+        self.p=p; self.cfg=cfg; self.owner=owner; self.host=host; self.model=p.sd_model if model is None else model
         self.family,self.family_size=model_family(self.model,host)
         if self.family is None:
             raise ValueError('Head Swap could not identify the loaded model as Flux.2 Klein or Qwen Image Edit. Load one of those checkpoints.')
-        self.owner.last_report={'version':core.VERSION,'status':'Preparing current generation.','model_family':self.family}
+        self.owner.last_report={'version':core.VERSION,'status':'Preparing current generation.','model_family':self.family,'model_size':self.family_size}
         self.error=None; self.cancelled=None; self.completed=[]; self.processing=None
         self.cache=core.BoundedCache(); self.hits=0; self.encodes=0
         self.snap={}; self.region=None; self.plans=[]; self.analysis={}; self.start=time.perf_counter()
@@ -237,7 +238,9 @@ class Session:
         self.host.shared.state.textinfo=self.error
         print(self.error)
     def process(self):
-        p=self.p; cfg=self.cfg
+        p=self.p; cfg=dict(self.cfg)
+        if any(core.has_speed_lora(text) for text in p.all_prompts):
+            cfg['ban_channel']='Positive-only (fast, CFG 1.0)'
         self.input_prompts=list(p.all_prompts); self.input_negatives=list(p.all_negative_prompts)
         if cfg['seed_lock']:
             self.set_p('all_seeds',[p.all_seeds[0]]*len(p.all_seeds)); self.set_p('all_subseeds',[p.all_subseeds[0]]*len(p.all_subseeds))
@@ -294,7 +297,8 @@ class Session:
         cached=self.cache.get(key) if self.cfg['cache_encodes'] else None
         if cached is not None: self.hits+=1; return cached
         array=np.moveaxis(np.asarray(im,dtype=np.float32)/255,2,0).copy()
-        tensor=h.torch.from_numpy(array).unsqueeze(0).to(device=h.devices.device)
+        tensor=h.torch.from_numpy(array).unsqueeze(0)
+        if self.family!='qwen': tensor=tensor.to(device=h.devices.device)
         # Capture the reference from Forge itself (correct VAE scaling) in a temporary list.
         saved_refs=self.model.ref_latents; saved_ini=self.model.ini_latent
         previous=h.dynamic.is_referencing
@@ -306,7 +310,7 @@ class Session:
                 # model.ref_latents by its own encode_first_stage; no is_referencing
                 # VAE encode happens here. Keep dynamic_args.edit enabled.
                 if saved_edit is not None: h.dynamic.edit=True
-                self.model.ref_latents=[tensor.movedim(1,-1).mul(0.5).add(0.5).contiguous().cpu()]
+                self.model.ref_latents=[tensor.movedim(1,-1).contiguous().cpu()]
                 self.encodes+=1
                 if self.cfg['cache_encodes']:
                     self.cache.put(key,self.model.ref_latents[0],
@@ -463,6 +467,13 @@ class Session:
         if cfg['quality_strict'] and not acceptable:
             raise ValueError('Output failed the head-size / detail quality gate and was not saved. Inspect Show last generation report; adjust reference, sampling size or mask context.')
         if not acceptable: self.host.shared.state.textinfo='Klein: output quality needs review; see Show last generation report.'
+        auditor=getattr(self.owner,'auditor',None)
+        if cfg['identity_check'] and auditor is not None and self.selected_ref is not None:
+            from .identity import sample
+            ticket=auditor.submit(sample(self.original,self.target_pose),sample(image,final_face),
+                [sample(ref,pose) for ref,pose in zip(self.refs,self.poses)],self.selected_ref,cfg['identity_threshold'],
+                {'image':index+1,'seed':self.plans[min(index,len(self.plans)-1)].seed},wait_seconds=0)
+            self.owner.last_report['identity_ticket']=ticket
         return image
     def close(self):
         if self.closed: return
@@ -485,7 +496,7 @@ class Session:
 
 def install_bridge(processing,host):
     original=processing.process_images_inner
-    if getattr(original,'_khs_bridge',False): return
+    if getattr(original,'_khs_bridge',False): return original
     @wraps(original)
     def wrapped(*args,**kwargs):
         p=args[0] if args else kwargs.get('p')
@@ -500,7 +511,8 @@ def install_bridge(processing,host):
         if family is None:
             raise ValueError('Head Swap is enabled, but the loaded model is not Flux.2 Klein or Qwen Image Edit. Disable the extension or load a supported checkpoint.')
         if not getattr(p,'init_images',None): raise ValueError('Head Swap needs an img2img target image.')
-        if len(p.init_images)!=1: raise ValueError('Process one target per request. Use Forge Batch to process separate target files sequentially.')
+        if any(im is not p.init_images[0] and core.image_hash(im)!=core.image_hash(p.init_images[0]) for im in p.init_images[1:]):
+            raise ValueError('Process one target per request. Use Forge Batch for separate target files.')
         session=None
         try:
             session=Session(p,cfg,owner,host); session.processing=processing; p._khs_session=session; session.enter()

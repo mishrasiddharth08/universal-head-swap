@@ -34,14 +34,14 @@ LEGACY_KEYS = [
 NEW_KEYS = ['edit_scope','target_face','crop_padding','mask_feather','custom_mask','earrings','reference_framing',
             'reference_budget','tiny_head_boost','strict_adapter','color_match','cache_encodes','ban_jewelry',
             'removal_priority','match_sharpness','geometry_match','quality_strict','keep_original_canvas',
-            'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength']
+            'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength','auto_model_adapter']
 ARG_KEYS = LEGACY_KEYS + NEW_KEYS
 APPEARANCE = ('bindi','earrings','tattoos','piercings','cross','jewelry')
 POLICIES = ['Preserve', 'Remove', 'Use prompt / preset']
 RATIO_MODES = ['Strict (match target head size exactly)', 'Strict + neck match', 'Balanced (allow tiny hair-volume change)']
 CATEGORIES = ['hairstyle','hair_color','makeup','expression','lighting','age','ethnicity','camera','earrings']
 DEFAULTS = {k:False for k in ARG_KEYS}
-DEFAULTS.update(enable=False,headshots=None,lora_dropdown='Auto (match model)',lora_strength=1.0,
+DEFAULTS.update(auto_model_adapter=True,enable=False,headshots=None,lora_dropdown='Auto (match model)',lora_strength=1.0,
     char_lora_name='None (skip)',char_lora_strength=0.7,char_lora_trigger='',expression_strength=1.0,
     neg_preset_dropdown='None',neg_prompt_enable=False,neg_prompt_text='',resolution_dropdown='1024',auto_prompt=True,
     prevent_extra_head=True,hdr_gain=0.25,dof_blur=0.0,grain_amount=0.0,sharpness=0,latent_sharpness=0,
@@ -187,6 +187,9 @@ BAN_NEG={'bindi':['bindi','sindoor','forehead mark'],'earrings':['earrings','ear
          'cross':['cross symbol','crucifix']}
 BAN_NEG.update({key:CATALOG[key] for key in APPEARANCE})
 
+def has_speed_lora(text):
+    return any(re.search(r'turbo|lightning|distill',tag.split(':',1)[0],re.I) for tag in TOKEN.findall(str(text)))
+
 def affirmative_mention(text,key):
     for match in re.finditer(BAN_PATTERNS[key],str(text).lower()):
         prefix=re.split(r'[.!?;,]|\bbut\b',str(text).lower()[:match.start()])[-1]
@@ -236,7 +239,10 @@ def select_adapter(entries,size,family='klein'):
         found_family,found=adapter_family(name,meta)
         if found_family!=family or not any(x in name.lower() for x in ('bfs','swap')): continue
         if family=='klein' and found!=size: continue
-        eligible.append((40*bool(family=='klein' and size and found==size)+20*('bfs_head' in name.lower()),name))
+        preferred='bfs_head_v1_qwen_2.1' if family=='qwen' else ('bfs_head_v1_flux-klein_9b_step3500_rank128' if size==9 else '')
+        basename=clean_name(name).split('/')[-1].lower()
+        exact=bool(preferred and basename==preferred)
+        eligible.append((100*exact+40*bool(family=='klein' and size and found==size)+20*('bfs_head' in name.lower()),name))
     if not eligible:
         if family=='klein':
             raise ValueError('No verified matching face-swap adapter found. Load Klein and choose its 4B or 9B BFS LoRA.')
@@ -550,7 +556,10 @@ def build_region(original,pose,padding=0.55,feather=0.08,mask=None):
         if mask is None: raise ValueError('The custom mask is empty.')
         if not isinstance(mask,Image.Image): mask=rgb_image(mask)
         mask=ImageOps.exif_transpose(mask).convert('L')
-        if mask.size!=original.size: raise ValueError('The custom mask must have the same dimensions as the target image.')
+        if mask.size!=original.size:
+            # Batch folders mix dimensions; scale the mask to each target instead of aborting the run.
+            print(f"[UniversalHeadSwap] Custom mask {mask.size} != target {original.size}; resizing mask to fit.")
+            mask=mask.resize(original.size,Image.Resampling.LANCZOS)
         bbox=mask.getbbox()
         if not bbox: raise ValueError('The custom mask has no white edit region.')
         x0,y0,x1,y1=bbox; hh=y1-y0; hw=x1-x0

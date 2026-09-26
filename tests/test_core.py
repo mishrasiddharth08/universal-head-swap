@@ -150,9 +150,10 @@ class GeometryTests(unittest.TestCase):
         original=np.asarray(self.im); actual=np.asarray(result); outside=np.asarray(region.mask)==0
         self.assertTrue(outside.any()); np.testing.assert_array_equal(original[outside],actual[outside])
         self.assertEqual(result.size,self.im.size)
-    def test_custom_empty_or_wrong_size_mask_refused(self):
-        for mask in (Image.new('L',self.im.size),Image.new('L',(4,4),'white')):
-            with self.assertRaises(ValueError): core.build_region(self.im,self.pose,mask=mask)
+    def test_custom_empty_mask_refused_and_wrong_size_mask_resized(self):
+        with self.assertRaises(ValueError): core.build_region(self.im,self.pose,mask=Image.new('L',self.im.size))
+        region=core.build_region(self.im,self.pose,mask=Image.new('L',(4,4),'white'))
+        self.assertEqual(region.mask.size,self.im.size)
     def test_protected_requires_detection_or_mask(self):
         with self.assertRaises(ValueError): core.build_region(self.im,None)
     def test_canvas_inverse_mapping_retains_dimensions(self):

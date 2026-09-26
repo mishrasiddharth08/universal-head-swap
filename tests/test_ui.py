@@ -34,6 +34,8 @@ class UIConstructionTests(unittest.TestCase):
             self.assertIsNone(ui.HOST)
             with gr.Blocks(analytics_enabled=False):
                 script=ui.UniversalHeadSwap()
+                script.after_component(gr.Dropdown(choices=['klein','qwen_image21'],value='klein'),elem_id='forge_ui_preset')
+                script.after_component(gr.Dropdown(choices=['klein-9b'],value='klein-9b'),elem_id='setting_sd_model_checkpoint')
                 controls=script.ui(True)
                 self.assertEqual(len(controls),len(core.ARG_KEYS))
                 self.assertEqual(len({id(c) for c in controls}),len(controls))

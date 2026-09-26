@@ -15,7 +15,7 @@ from modules.ui_components import InputAccordion
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path: sys.path.insert(0,str(ROOT))
-from khs import core, runtime, saving
+from khs import core, runtime, saving, identity
 from khs.vision import FaceAnalyzer
 
 HOST=None; BRIDGE=None; BRIDGE_ERROR=''
@@ -36,6 +36,7 @@ INSTANCES=[]
 def unload():
     for instance in INSTANCES:
         instance.analyzer.close()
+        instance.auditor.close()
     if BRIDGE is not None and processing.process_images_inner is BRIDGE:
         processing.process_images_inner=BRIDGE._khs_original
 script_callbacks.on_script_unloaded(unload)
@@ -45,6 +46,7 @@ class UniversalHeadSwap(scripts.Script):
     sorting_priority=900
     def __init__(self):
         self.analyzer=FaceAnalyzer(ROOT/'scripts/models/face_landmarker.task')
+        self.auditor=identity.Auditor(ROOT/'scripts/models')
         self.custom={}; self.custom_error=''; self.components={}; self.capture_target=False
         self.last_report={'version':core.VERSION,'status':'No generation in this session yet.'}
         try: self.custom=core.load_custom(ROOT/'scripts/custom_data.json')
@@ -54,6 +56,8 @@ class UniversalHeadSwap(scripts.Script):
     def show(self,is_img2img): return scripts.AlwaysVisible if is_img2img else False
     def after_component(self,component,**kwargs):
         elem=kwargs.get('elem_id') or getattr(component,'elem_id',None)
+        if elem=='forge_ui_preset': self.components['forge_preset']=component
+        if elem=='setting_sd_model_checkpoint': self.components['checkpoint']=component
         if elem in ('img2img_prompt','img2img_neg_prompt','img2img_seed','img2img_cfg_scale'): self.components[elem]=component
         if elem=='img2img_image': self.capture_target=True
         classes=kwargs.get('elem_classes') or getattr(component,'elem_classes',[]) or []
@@ -73,7 +77,7 @@ class UniversalHeadSwap(scripts.Script):
         try: names=list(runtime.registry()) if HOST else []
         except Exception as e: names=[]; print(f'[UniversalHeadSwap] Adapter list unavailable: {e}')
         with InputAccordion(False,label='Universal Head Swap') as C['enable']:
-            gr.Markdown('Use your **img2img picture** as the target. Add identity headshots below, then use Forge’s **Generate** button.')
+            gr.Markdown('Use your **img2img picture** as the target. Add identity headshots below, then use Forge’s **Generate** button. **Automatic model matching:** leave the head-swap adapter on Auto to follow the loaded Klein 4B, Klein 9B or Qwen Image Edit model after switching presets.')
             if BRIDGE_ERROR:
                 gr.Markdown('**Unavailable:** '+BRIDGE_ERROR); C['enable'].interactive=False
             if self.custom_error: gr.Markdown('**Custom preset warning:** '+self.custom_error)
@@ -136,6 +140,7 @@ class UniversalHeadSwap(scripts.Script):
                         check('seed_lock','Reuse the first seed for this target')
                     with gr.Tab('Adapters',id='adapters'):
                         with gr.Row():
+                            check('auto_model_adapter','Automatically select the matching head-swap LoRA when the model changes')
                             drop('lora_dropdown','Face-swap adapter',['Auto (match model)']+names)
                             slide('lora_strength','Adapter strength',0.05,2,0.05)
                         with gr.Row():
@@ -229,6 +234,24 @@ class UniversalHeadSwap(scripts.Script):
             C['ban_channel'].change(guidance,inputs=C['ban_channel'],outputs=guidance_note,queue=False)
             use_negatives.click(lambda:gr.update(value='Positive + Negative (uses at least CFG 1.1)'),outputs=C['ban_channel'],queue=False)
             edit_mask.click(lambda:(gr.update(open=True),gr.update(selected='detail'),gr.update(open=True)),outputs=[advanced,tabs,mask_section],queue=False)
+            def sync_adapter(preset,checkpoint,automatic):
+                if not automatic: return gr.update()
+                key=str(preset).lower()
+                if 'qwen' in key: family,size='qwen',None
+                elif 'klein' in key:
+                    checkpoint=str(checkpoint or '').lower()
+                    family,size='klein',4 if '4b' in checkpoint or '4b' in key else 9
+                else: return gr.update(value='Auto (match model)')
+                try:
+                    entries=runtime.registry()
+                    choice=core.select_adapter({name:item.metadata for name,item in entries.items()},size,family)
+                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice)
+                except Exception: return gr.update(value='Auto (match model)')
+            preset_component=self.components.get('forge_preset')
+            checkpoint_component=self.components.get('checkpoint')
+            if preset_component is not None and checkpoint_component is not None:
+                for control in (preset_component,checkpoint_component,C['auto_model_adapter']):
+                    control.change(sync_adapter,inputs=[preset_component,checkpoint_component,C['auto_model_adapter']],outputs=C['lora_dropdown'],queue=False)
             def refresh_adapters():
                 import networks
                 networks.list_available_networks(); ns=list(networks.available_networks)
@@ -252,7 +275,7 @@ class UniversalHeadSwap(scripts.Script):
             C['preset_save_btn'].click(save,inputs=[C['preset_save_name']]+save_inputs,outputs=[C['preset_dropdown'],preset_status],queue=False)
             C['preset_dropdown'].change(load,inputs=[C['preset_dropdown']],outputs=save_inputs,queue=False)
             C['preset_delete_btn'].click(delete,inputs=[C['preset_dropdown']],outputs=[C['preset_dropdown'],preset_status],queue=False)
-            last_run.click(lambda:(json.dumps(self.last_report,indent=2,ensure_ascii=False),self.last_report),outputs=[C['pos_status'],analysis_json],queue=False)
+            last_run.click(lambda:(json.dumps(self.generation_report(),indent=2,ensure_ascii=False),self.generation_report()),outputs=[C['pos_status'],analysis_json],queue=False)
             required=[self.components.get(k) for k in ('target','img2img_prompt','img2img_neg_prompt','img2img_seed','img2img_cfg_scale')]
             if all(x is not None for x in required):
                 def preview_and_open(*values): return (*self.preview(*values),gr.update(open=True))
@@ -305,6 +328,16 @@ class UniversalHeadSwap(scripts.Script):
             guidance_status='negative prompts OFF' if plan.cfg==1 else 'negative prompts active'
             return display,f'{len(faces)} target faces; slot {slot+1}: {reason}; {guidance_status} (CFG {plan.cfg:g})',overlay,refs[slot],report
         except Exception as e: raise gr.Error(str(e))
+
+    def generation_report(self):
+        report=dict(self.last_report)
+        report['identity_checks']=self.auditor.snapshot()
+        return report
+
+    def headswap_external_context(self,p):
+        from khs.external import context
+        values=list(getattr(p,'script_args',[]) or [])[self.args_from:self.args_to]
+        return context(p,core.normalize(values),self)
 
     def before_process(self,p,*args):
         if getattr(p,'_ad_inner',False) or getattr(p,'is_hr_pass',False): return

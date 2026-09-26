@@ -183,4 +183,44 @@ class RuntimeTests(unittest.TestCase):
         runtime.install_bridge(processing,host); first=processing.process_images_inner
         runtime.install_bridge(processing,host); self.assertIs(first,processing.process_images_inner)
 
+    def test_loaded_qwen_wins_over_stale_klein_flag(self):
+        model=NS(text_processing_engine_qwen=object())
+        host=NS(dynamic=NS(klein=True,edit=True))
+        self.assertEqual(runtime.model_family(model,host),('qwen',None))
+        host.dynamic.edit=False
+        self.assertEqual(runtime.model_family(model,host),(None,None))
+
+    def test_klein_architecture_without_preset_flag(self):
+        for size in (4,9):
+            model=NS(model_config=type(f'Flux2K{size}B',(),{})())
+            self.assertEqual(runtime.model_family(model,NS(dynamic=NS(klein=False))),('klein',size))
+
+    def test_bridge_returns_existing_wrapper(self):
+        processing=NS(process_images_inner=lambda p:p)
+        first=runtime.install_bridge(processing,NS())
+        self.assertIs(runtime.install_bridge(processing,NS()),first)
+
+    def test_qwen_reference_keeps_pixels_and_stays_on_cpu(self):
+        import numpy as np
+        class PixelTensor:
+            def __init__(self,a): self.a=a
+            def unsqueeze(self,i): return PixelTensor(np.expand_dims(self.a,i))
+            def movedim(self,a,b): return PixelTensor(np.moveaxis(self.a,a,b))
+            def contiguous(self): return self
+            def cpu(self): return self
+            def to(self,**kw): raise AssertionError('Qwen pixels must stay on CPU')
+            def numel(self): return self.a.size
+            def element_size(self): return self.a.itemsize
+        model,host,p,owner,cfg=self.fixtures()
+        session=self.session(p,cfg,owner,host)
+        session.family='qwen'; host.dynamic.edit=True
+        host.torch.from_numpy=PixelTensor
+        original=model.ref_latents
+        reference=Image.new('RGB',(8,8),(0,128,255))
+        tensor=session._encode(reference)
+        np.testing.assert_allclose(tensor.a[0,0,0],[0,128/255,1],rtol=1e-6)
+        self.assertIs(model.ref_latents,original)
+        self.assertIs(session._encode(reference),tensor)
+        self.assertEqual(session.encodes,1)
+
 if __name__=='__main__': unittest.main()
