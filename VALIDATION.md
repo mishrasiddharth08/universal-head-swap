@@ -112,3 +112,23 @@ The Project Invisible Qwen 2.1 engine bypasses Forge's standard generation callb
 - Optional CPU identity checks are now connected to completed images and shown in the existing generation report. They are advisory; a passing score does not guarantee likeness. The real protected-head test passed the selected/median identity thresholds and face-height/center check; width/reference-consistency warnings still require visual review.
 
 Restart Forge completely after the current batch finishes to load both updated extensions. A browser refresh alone does not load Python changes.
+
+## Turbo control and profile-face follow-up
+
+- Fixed a companion UI bug that wrapped `gr.skip()` inside a slider value. Toggling Turbo off could subsequently crash a batch with `float() ... not dict`. Callbacks now emit proper skip updates and match the number of bound controls; the option reader also recovers old nested-skip values and validates numeric strengths.
+- Added an optional CPU YuNet fallback when MediaPipe misses a sunglasses/profile face. It uses the already installed identity detector and downloads nothing.
+- Quality diagnosis: random hairstyle, age, ethnicity and film-camera choices change the requested identity and scene. A clean local identity preset uses protected-head compositing and clears these style changes. Existing presets are retained.
+- Identity and geometry measurements are advisory. Profile views and sunglasses can still produce imperfect likeness; inspect the generated face rather than treating a successful save as a quality guarantee.
+
+- Fixed automatic BFS UI selection by binding Forge shared preset/checkpoint controls directly; refreshes installed LoRAs on switching and synchronizes on page load. Selection follows model family/size, independent of quantization suffixes. Real generation still validates loaded architecture.
+
+## Qwen quality and automatic selection follow-up
+
+- Fixed missing automatic-selection events when Forge builds shared model controls before the img2img script runner. Page load and preset/checkpoint changes now refresh and select matching registered BFS adapters, including subfolders. Regression checks cover Qwen and Klein 4B/9B with GGUF, FP8, INT8 ConvRot and BF16 filenames; these are routing checks, not GPU validation of every format.
+- Simplified the UI into saved setups, model/identity, references, preview and grouped advanced settings. Existing controls and saved values remain available.
+- Qwen receives native <image1>/<image2> references and unweighted instructions. The companion preserves CFG with empty negative text; Turbo still uses CFG 1 and its own sigma schedule.
+- Real local Qwen INT8 ConvRot trial: 20 steps, CFG 3, Turbo off, BFS 1.0, character 0.7, 768x960 sampling, automatic reference selection, protected scene. Completed in 67 seconds including cold loading. Selected-reference cosine 0.4273 and median 0.3744 exceeded the advisory 0.363 threshold; geometry/reference-set warnings still require visual review. These scores are not accuracy percentages.
+- Qwen currently uses its dedicated Euler scheduler. Native Forge Res Multistep/Beta selection does not switch this dedicated engine. Do not claim equivalence to community workflows.
+- Restart Forge and reload the browser to use Python/UI fixes. For the local quality setup use 20 steps, CFG 3 and disable Turbo in Qwen controls; a Head Swap preset does not change those main controls.
+
+- Reorganized controls into Setup, Appearance, Quality & mask, Speed & memory, Saved setups and Report tabs. Head-swap BFS and optional character LoRA selectors are visible in Setup. Empty Gradio mask payloads now use automatic detection; deliberately black masks still fail safely. Advanced features and argument order are preserved.

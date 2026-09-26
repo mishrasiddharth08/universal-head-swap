@@ -77,57 +77,37 @@ class UniversalHeadSwap(scripts.Script):
         try: names=list(runtime.registry()) if HOST else []
         except Exception as e: names=[]; print(f'[UniversalHeadSwap] Adapter list unavailable: {e}')
         with InputAccordion(False,label='Universal Head Swap') as C['enable']:
-            gr.Markdown('Use your **img2img picture** as the target. Add identity headshots below, then use Forge’s **Generate** button. **Automatic model matching:** leave the head-swap adapter on Auto to follow the loaded Klein 4B, Klein 9B or Qwen Image Edit model after switching presets.')
+            gr.Markdown('Add your target in **img2img**, add headshots here, then press **Generate**. Model matching is automatic.')
             if BRIDGE_ERROR:
                 gr.Markdown('**Unavailable:** '+BRIDGE_ERROR); C['enable'].interactive=False
             if self.custom_error: gr.Markdown('**Custom preset warning:** '+self.custom_error)
-            C['edit_scope']=gr.Radio(choices=[('Whole picture · swap + cleanup','Full image edit'),
-                ('Head only · protect the rest','Protected head edit')],value=defaults['edit_scope'],label='Editing mode')
-            C['headshots']=gr.Gallery(label='Reference headshots · up to 20',columns=5,height=165,type='pil',format='png',interactive=True,allow_preview=True)
-            summary=gr.Markdown('**Cleanup:** remove tattoos, piercings, forehead marks and jewelry. **Negative prompts active.**')
-            with gr.Row():
-                check('geometry_match','Check original head size and position')
-                check('match_sharpness','Match original face detail')
-            with gr.Row():
-                analyze=gr.Button('Check setup',variant='primary')
-                edit_mask=gr.Button('Edit head mask',visible=False)
-            C['ratio_status']=gr.Textbox(label='Setup status',value='Add headshots, then check the selected reference and edit area.',interactive=False,lines=1)
-            with gr.Accordion('Setup preview',open=False) as preview_section:
-                with gr.Row():
-                    preview_image=gr.Image(label='Target and edit area',type='pil',format='png',height=250,interactive=False)
-                    preview_ref=gr.Image(label='Selected reference',type='pil',format='png',height=250,interactive=False)
-            with gr.Accordion('More options',open=False) as advanced:
-                with gr.Tabs() as tabs:
-                    with gr.Tab('Look',id='look'):
-                        gr.Markdown('**Cleanup preferences**')
-                        labels={'bindi':'Forehead marks / sindoor','earrings':'Earrings','tattoos':'Tattoos / henna',
-                                'piercings':'Body piercings','cross':'Cross symbols','jewelry':'Other jewelry'}
-                        for row in (('tattoos','piercings','bindi'),('earrings','jewelry','cross')):
-                            with gr.Row():
-                                for key in row: drop('ban_'+key,labels[key],core.POLICIES)
-                        check('removal_priority','Prioritize removal over conflicting prompts')
+            with gr.Tabs() as tabs:
+                with gr.Tab('Setup',id='setup'):
+                    gr.Markdown('**LoRAs** · Auto selects BFS for your model. Choose your character LoRA below if needed.')
+                    with gr.Row():
+                        check('auto_model_adapter','Auto-select head-swap LoRA')
+                        drop('lora_dropdown','Head-swap LoRA (BFS)',['Auto (match model)']+names)
+                        slide('lora_strength','Head-swap strength',0.05,2,0.05)
+                    with gr.Row():
+                        drop('char_lora_name','Character LoRA (optional)',['None (skip)']+names)
+                        slide('char_lora_strength','Character strength',-2,2,0.05)
+                    text('char_lora_trigger','Character trigger words')
+                    check('strict_adapter','Check face-swap adapter compatibility')
+                    refresh=gr.Button('Refresh adapter list',size='sm')
+                    gr.Markdown('Auto matches a registered BFS adapter to the loaded model: Klein 4B/9B or Qwen Image Edit.')
+                    C['edit_scope']=gr.Radio(choices=[('Whole picture · swap + cleanup','Full image edit'),
+                        ('Head only · protect the rest','Protected head edit')],value=defaults['edit_scope'],label='Editing mode')
+                    C['headshots']=gr.Gallery(label='Reference headshots · up to 20',columns=5,height=165,type='pil',format='png',interactive=True,allow_preview=True)
+                    summary=gr.Markdown('**Cleanup:** remove tattoos, piercings, forehead marks and jewelry. **Negative prompts active.**')
+                    with gr.Row():
+                        analyze=gr.Button('Check setup',variant='primary')
+                        edit_mask=gr.Button('Edit head mask',visible=False)
+                    C['ratio_status']=gr.Textbox(label='Setup status',value='Add headshots, then check the selected reference and edit area.',interactive=False,lines=1)
+                    with gr.Accordion('Setup preview',open=False) as preview_section:
                         with gr.Row():
-                            drop('ban_channel','Guidance mode',['Positive + Negative (uses at least CFG 1.1)','Positive-only (fast, CFG 1.0)'])
-                            slide('blend_slider','Swap instruction strength',0,100,5)
-                        guidance_note=gr.Markdown('Negative prompts active. Effective CFG is at least 1.1; additional guidance can take longer.')
-                        use_negatives=gr.Button('Use negative prompts for cleanup',size='sm')
-                        gr.Markdown('Remove jewelry or piercings also requires bare ears. Inspect visible skin: removal instructions are not a guarantee.')
-                        with gr.Accordion('Hair, expression and style',open=False):
-                            for category in core.CATEGORIES:
-                                with gr.Row():
-                                    C[category]=gr.Dropdown(choices=self.choices[category],value=[],multiselect=True,
-                                        allow_custom_value=True,label=category.replace('_',' ').capitalize(),scale=4)
-                                    if category!='earrings': check('rand_'+category,'Choose one per image',scale=1,min_width=145)
-                            slide('expression_strength','Expression emphasis',0.1,2,0.05)
-                        with gr.Accordion('Prompt controls',open=False):
-                            drop('blend_order','Instruction order',['Extension instruction first','User prompt first'])
-                            with gr.Row():
-                                check('auto_prompt','Build swap wording when the main prompt is empty')
-                                check('prevent_extra_head','Prevent a duplicate head')
-                            drop('neg_preset_dropdown','Negative preset',['None']+list(self.custom.get('negative_presets',{})))
-                            check('neg_prompt_enable','Append additional negatives')
-                            text('neg_prompt_text','Additional negative prompt',lines=3)
-                    with gr.Tab('References',id='references'):
+                            preview_image=gr.Image(label='Target and edit area',type='pil',format='png',height=250,interactive=False)
+                            preview_ref=gr.Image(label='Selected reference',type='pil',format='png',height=250,interactive=False)
+                    with gr.Accordion('Reference selection',open=False):
                         with gr.Row():
                             drop('pick_mode','Selection',['Best match (smart, no rotation)','Rotate good matches','Always rotation'])
                             drop('manual_slot','Specific headshot',['Auto (no override)']+[str(i) for i in range(1,21)])
@@ -138,83 +118,103 @@ class UniversalHeadSwap(scripts.Script):
                             check('auto_pick_best','Score references automatically')
                             check('rotate_top_only','Rotate only good matches')
                         check('seed_lock','Reuse the first seed for this target')
-                    with gr.Tab('Adapters',id='adapters'):
+                with gr.Tab('Appearance',id='look'):
+                    gr.Markdown('**Cleanup preferences**')
+                    labels={'bindi':'Forehead marks / sindoor','earrings':'Earrings','tattoos':'Tattoos / henna',
+                            'piercings':'Body piercings','cross':'Cross symbols','jewelry':'Other jewelry'}
+                    for row in (('tattoos','piercings','bindi'),('earrings','jewelry','cross')):
                         with gr.Row():
-                            check('auto_model_adapter','Automatically select the matching head-swap LoRA when the model changes')
-                            drop('lora_dropdown','Face-swap adapter',['Auto (match model)']+names)
-                            slide('lora_strength','Adapter strength',0.05,2,0.05)
-                        with gr.Row():
-                            drop('char_lora_name','Character adapter',['None (skip)']+names)
-                            slide('char_lora_strength','Character strength',-2,2,0.05)
-                        text('char_lora_trigger','Character trigger')
-                        check('strict_adapter','Check face-swap adapter compatibility')
-                        refresh=gr.Button('Refresh adapter list',size='sm')
-                        gr.Markdown('Auto matches a registered BFS adapter to the loaded model: Klein 4B/9B or Qwen Image Edit.')
-                    with gr.Tab('Memory',id='memory'):
-                        with gr.Row():
-                            drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
-                            slide('reference_budget','Combined reference budget · megapixels',0.5,8,0.25)
-                        with gr.Row():
-                            check('cache_encodes','Reuse unchanged encodings')
-                            check('auto_adapt','Allow more reference detail for small heads')
-                        gr.Markdown('Limits cover both references. Sampling memory also depends on the main Forge image size.')
-                    with gr.Tab('Detail',id='detail'):
-                        check('keep_original_canvas','Return original dimensions and aspect ratio')
-                        with gr.Row():
-                            check('ratio_lock','Also guide original head scale in the prompt')
-                            drop('ratio_mode','Head-scale guidance',core.RATIO_MODES)
-                        check('quality_strict','Reject outputs that fail enabled size or detail checks')
-                        gr.Markdown('Checks measure face height, position and local contrast. Review hair, neck, shoulders and actual texture separately.')
-                        with gr.Accordion('Fine-grid cleanup · optional',open=False):
-                            check('moire_enabled','Automatically reduce fine 2-pixel grids')
-                            slide('moire_strength','Cleanup strength',0,1,0.05)
-                            gr.Markdown('Off by default. Skips images without a detected grid; limits changes to protect fine texture. Compare at 100% zoom. This is not tattoo or piercing removal.')
-                        with gr.Accordion('Head mask and blending',open=False) as mask_section:
-                            gr.Markdown('For Head only mode: **white edits, black preserves**. A custom mask must match the target dimensions.')
-                            C['custom_mask']=gr.ImageEditor(label='Optional edit mask',type='pil',image_mode='RGB',height=300,
-                                brush=gr.Brush(colors=['#ffffff','#000000'],color_mode='fixed'),format='png',
-                                sources=['upload','clipboard'],transforms=[])
-                            mask_button=gr.Button('Create mask from detected head')
+                            for key in row: drop('ban_'+key,labels[key],core.POLICIES)
+                    check('removal_priority','Prioritize removal over conflicting prompts')
+                    with gr.Row():
+                        drop('ban_channel','Guidance mode',['Positive + Negative (uses at least CFG 1.1)','Positive-only (fast, CFG 1.0)'])
+                        slide('blend_slider','Swap instruction strength',0,100,5)
+                    guidance_note=gr.Markdown('Negative prompts active. Effective CFG is at least 1.1; additional guidance can take longer.')
+                    use_negatives=gr.Button('Use negative prompts for cleanup',size='sm')
+                    gr.Markdown('Remove jewelry or piercings also requires bare ears. Inspect visible skin: removal instructions are not a guarantee.')
+                    with gr.Accordion('Hair, expression and style',open=False):
+                        for category in core.CATEGORIES:
                             with gr.Row():
-                                slide('crop_padding','Context around head',0.2,1.5,0.05)
-                                slide('mask_feather','Blend edge softness',0,0.25,0.01)
-                            slide('color_match','Boundary color matching',0,0.5,0.05)
-                        with gr.Accordion('Finishing effects',open=False):
-                            check('hdr_enable','SDR HDR-look tone mapping')
-                            with gr.Row():
-                                slide('hdr_gain','Tone-map blend',0,1,0.05)
-                                slide('sharpness','Manual output sharpening',0,200,5)
-                            with gr.Row():
-                                slide('grain_amount','Film grain',0,0.1,0.005)
-                                slide('dof_blur','Background blur around head',0,20,0.5)
-                            gr.Markdown('Tone mapping is SDR, not HDR10. Blur uses a head ellipse, not whole-body segmentation. Protected-mode effects stay inside its mask.')
-                        with gr.Accordion('Experimental enhancements',open=False):
-                            check('geometry_correct','Resize head pixels after generation · may affect hair/neck seams')
-                            gr.Markdown('Off by default. Size checking and prompt guidance work without moving finished pixels. '
-                                'Only small resizing adjustments are allowed; use a reviewed head mask for larger corrections.')
-                            with gr.Row():
-                                slide('latent_sharpness','Latent sharpening · 0 disables',0,2,0.1)
-                                drop('latent_kernel_size','Latent sharpening kernel',['3x3','5x5','7x7','9x9','15x15'])
-                            check('blend_lora_boost','Boost adapter above instruction strength 50')
-                            check('tiny_head_boost','Small-head adapter boost')
-                    with gr.Tab('Presets and info',id='presets'):
-                        try: presets=core.load_presets(ROOT/'scripts/headswap_presets.json')
-                        except Exception as e: presets={}; gr.Markdown('**Preset error:** '+str(e))
+                                C[category]=gr.Dropdown(choices=self.choices[category],value=[],multiselect=True,
+                                    allow_custom_value=True,label=category.replace('_',' ').capitalize(),scale=4)
+                                if category!='earrings': check('rand_'+category,'Choose one per image',scale=1,min_width=145)
+                        slide('expression_strength','Expression emphasis',0.1,2,0.05)
+                    with gr.Accordion('Prompt controls',open=False):
+                        drop('blend_order','Instruction order',['Extension instruction first','User prompt first'])
                         with gr.Row():
-                            C['preset_dropdown']=gr.Dropdown(choices=list(presets),label='Saved setup',value=None)
-                            C['preset_save_name']=gr.Textbox(label='New preset name')
+                            check('auto_prompt','Build swap wording when the main prompt is empty')
+                            check('prevent_extra_head','Prevent a duplicate head')
+                        drop('neg_preset_dropdown','Negative preset',['None']+list(self.custom.get('negative_presets',{})))
+                        check('neg_prompt_enable','Append additional negatives')
+                        text('neg_prompt_text','Additional negative prompt',lines=3)
+                with gr.Tab('Quality & mask',id='detail'):
+                    with gr.Row():
+                        check('geometry_match','Check original head size and position')
+                        check('match_sharpness','Match original face detail')
+                    check('keep_original_canvas','Return original dimensions and aspect ratio')
+                    with gr.Row():
+                        check('ratio_lock','Also guide original head scale in the prompt')
+                        drop('ratio_mode','Head-scale guidance',core.RATIO_MODES)
+                    check('quality_strict','Reject outputs that fail enabled size or detail checks')
+                    gr.Markdown('Checks measure face height, position and local contrast. Review hair, neck, shoulders and actual texture separately.')
+                    with gr.Accordion('Fine-grid cleanup · optional',open=False):
+                        check('moire_enabled','Automatically reduce fine 2-pixel grids')
+                        slide('moire_strength','Cleanup strength',0,1,0.05)
+                        gr.Markdown('Off by default. Skips images without a detected grid; limits changes to protect fine texture. Compare at 100% zoom. This is not tattoo or piercing removal.')
+                    with gr.Accordion('Head mask and blending',open=False) as mask_section:
+                        gr.Markdown('For Head only mode: **white edits, black preserves**. A custom mask must match the target dimensions.')
+                        C['custom_mask']=gr.ImageEditor(label='Optional edit mask',type='pil',image_mode='RGB',height=300,
+                            brush=gr.Brush(colors=['#ffffff','#000000'],color_mode='fixed'),format='png',
+                            sources=['upload','clipboard'],transforms=[])
+                        mask_button=gr.Button('Create mask from detected head')
                         with gr.Row():
-                            C['preset_save_btn']=gr.Button('Save current setup')
-                            C['preset_delete_btn']=gr.Button('Delete selected preset')
-                        preset_status=gr.Textbox(label='Preset status',interactive=False,lines=1)
-                        gr.Markdown('Includes character adapter settings. Images and masks are excluded. Review cleanup choices after loading older presets.')
-                        with gr.Accordion('Prompt preview and generation report',open=False):
-                            C['blend_preview']=gr.Textbox(label='Resolved next-image prompt',lines=9,interactive=False)
-                            gr.Markdown('Reads plain img2img. Seed −1 shows a labeled example. For Batch/Inpaint, the actual generation report is authoritative.')
-                            last_run=gr.Button('Show last generation report')
-                            C['pos_status']=gr.Textbox(label='Last generation summary',lines=4,interactive=False)
-                            analysis_json=gr.JSON(label='Detailed report')
-                            check('no_ref_diag','Diagnostic generation without references')
+                            slide('crop_padding','Context around head',0.2,1.5,0.05)
+                            slide('mask_feather','Blend edge softness',0,0.25,0.01)
+                        slide('color_match','Boundary color matching',0,0.5,0.05)
+                    with gr.Accordion('Finishing effects',open=False):
+                        check('hdr_enable','SDR HDR-look tone mapping')
+                        with gr.Row():
+                            slide('hdr_gain','Tone-map blend',0,1,0.05)
+                            slide('sharpness','Manual output sharpening',0,200,5)
+                        with gr.Row():
+                            slide('grain_amount','Film grain',0,0.1,0.005)
+                            slide('dof_blur','Background blur around head',0,20,0.5)
+                        gr.Markdown('Tone mapping is SDR, not HDR10. Blur uses a head ellipse, not whole-body segmentation. Protected-mode effects stay inside its mask.')
+                    with gr.Accordion('Experimental enhancements',open=False):
+                        check('geometry_correct','Resize head pixels after generation · may affect hair/neck seams')
+                        gr.Markdown('Off by default. Size checking and prompt guidance work without moving finished pixels. '
+                            'Only small resizing adjustments are allowed; use a reviewed head mask for larger corrections.')
+                        with gr.Row():
+                            slide('latent_sharpness','Latent sharpening · 0 disables',0,2,0.1)
+                            drop('latent_kernel_size','Latent sharpening kernel',['3x3','5x5','7x7','9x9','15x15'])
+                        check('blend_lora_boost','Boost adapter above instruction strength 50')
+                        check('tiny_head_boost','Small-head adapter boost')
+                with gr.Tab('Speed & memory',id='memory'):
+                    with gr.Row():
+                        drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
+                        slide('reference_budget','Combined reference budget · megapixels',0.5,8,0.25)
+                    with gr.Row():
+                        check('cache_encodes','Reuse unchanged encodings')
+                        check('auto_adapt','Allow more reference detail for small heads')
+                    gr.Markdown('Limits cover both references. Sampling memory also depends on the main Forge image size.')
+                with gr.Tab('Saved setups',id='presets'):
+                    try: presets=core.load_presets(ROOT/'scripts/headswap_presets.json')
+                    except Exception as e: presets={}; gr.Markdown('**Preset error:** '+str(e))
+                    with gr.Row():
+                        C['preset_dropdown']=gr.Dropdown(choices=list(presets),label='Saved setup',value=None)
+                        C['preset_save_name']=gr.Textbox(label='New preset name')
+                    with gr.Row():
+                        C['preset_save_btn']=gr.Button('Save current setup')
+                        C['preset_delete_btn']=gr.Button('Delete selected preset')
+                    preset_status=gr.Textbox(label='Preset status',interactive=False,lines=1)
+                    gr.Markdown('Includes character adapter settings. Images and masks are excluded. Review cleanup choices after loading older presets.')
+                with gr.Tab('Report',id='report'):
+                    C['blend_preview']=gr.Textbox(label='Resolved next-image prompt',lines=9,interactive=False)
+                    gr.Markdown('Reads plain img2img. Seed −1 shows a labeled example. For Batch/Inpaint, the actual generation report is authoritative.')
+                    last_run=gr.Button('Show last generation report')
+                    C['pos_status']=gr.Textbox(label='Last generation summary',lines=4,interactive=False)
+                    analysis_json=gr.JSON(label='Detailed report')
+                    check('no_ref_diag','Diagnostic generation without references')
             for key in core.ARG_KEYS:
                 if key not in C: C[key]=gr.Checkbox(value=bool(defaults.get(key)),visible=False,label='Legacy '+key)
             all_inputs=[C[k] for k in core.ARG_KEYS]; save_inputs=[C[k] for k in core.SAVE_KEYS]
@@ -233,7 +233,7 @@ class UniversalHeadSwap(scripts.Script):
                     if 'Positive-only' in str(channel) else 'Negative prompts active. Effective CFG is at least 1.1; additional guidance can take longer.')
             C['ban_channel'].change(guidance,inputs=C['ban_channel'],outputs=guidance_note,queue=False)
             use_negatives.click(lambda:gr.update(value='Positive + Negative (uses at least CFG 1.1)'),outputs=C['ban_channel'],queue=False)
-            edit_mask.click(lambda:(gr.update(open=True),gr.update(selected='detail'),gr.update(open=True)),outputs=[advanced,tabs,mask_section],queue=False)
+            edit_mask.click(lambda:(gr.update(selected='detail'),gr.update(open=True)),outputs=[tabs,mask_section],queue=False)
             def sync_adapter(preset,checkpoint,automatic):
                 if not automatic: return gr.update()
                 key=str(preset).lower()
@@ -243,15 +243,25 @@ class UniversalHeadSwap(scripts.Script):
                     family,size='klein',4 if '4b' in checkpoint or '4b' in key else 9
                 else: return gr.update(value='Auto (match model)')
                 try:
+                    import networks
+                    networks.list_available_networks()
                     entries=runtime.registry()
                     choice=core.select_adapter({name:item.metadata for name,item in entries.items()},size,family)
                     return gr.update(choices=['Auto (match model)']+list(entries),value=choice)
                 except Exception: return gr.update(value='Auto (match model)')
             preset_component=self.components.get('forge_preset')
             checkpoint_component=self.components.get('checkpoint')
+            try:
+                from modules_forge import main_entry
+                preset_component=getattr(main_entry,'ui_forge_preset',None) or preset_component
+                checkpoint_component=getattr(main_entry,'ui_checkpoint',None) or checkpoint_component
+            except ImportError:
+                pass
             if preset_component is not None and checkpoint_component is not None:
-                for control in (preset_component,checkpoint_component,C['auto_model_adapter']):
-                    control.change(sync_adapter,inputs=[preset_component,checkpoint_component,C['auto_model_adapter']],outputs=C['lora_dropdown'],queue=False)
+                inputs=[preset_component,checkpoint_component,C['auto_model_adapter']]
+                gr.context.Context.root_block.load(sync_adapter,inputs=inputs,outputs=C['lora_dropdown'],queue=False)
+                for control in inputs:
+                    control.change(sync_adapter,inputs=inputs,outputs=C['lora_dropdown'],queue=False)
             def refresh_adapters():
                 import networks
                 networks.list_available_networks(); ns=list(networks.available_networks)
@@ -290,7 +300,7 @@ class UniversalHeadSwap(scripts.Script):
                 mask_button.click(make_mask,inputs=[required[0],C['target_face'],C['crop_padding']],outputs=C['custom_mask'])
             else:
                 analyze.interactive=False
-                C['ratio_status'].value='Main canvas unavailable here. See More options → Presets and info → generation report.'
+                C['ratio_status'].value='Batch mode: see the Report tab after generation.'
         self.ui_controls=C
         return [C[k] for k in core.ARG_KEYS]
 

@@ -146,6 +146,9 @@ class GeometryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'at most 20'): core.gallery_images([self.im]*21)
     def test_protected_composite_preserves_zero_mask_pixels(self):
         region=core.build_region(self.im,self.pose,0.3,0.05)
+        empty=core.build_region(self.im,self.pose,0.3,0.05,{'background':None,'layers':[],'composite':None})
+        self.assertEqual(region.box,empty.box)
+        self.assertEqual(region.mask.tobytes(),empty.mask.tobytes())
         result=core.composite_region(Image.new('RGB',(1024,1024),'green'),region)
         original=np.asarray(self.im); actual=np.asarray(result); outside=np.asarray(region.mask)==0
         self.assertTrue(outside.any()); np.testing.assert_array_equal(original[outside],actual[outside])

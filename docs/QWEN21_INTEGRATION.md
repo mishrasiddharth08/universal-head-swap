@@ -15,4 +15,8 @@ Use the generation report to verify the selected reference and adapters. Absence
 
 ## Validation scope
 
-128 tests cover this repository. The separately updated companion passed 122 tests. A real RTX 5090 test used Qwen INT8 ConvRot, 13 headshots, BFS, a character LoRA and Viggle v0.2.1 Turbo. The protected result saved successfully; face identity and face-height/center checks passed, with advisory width/reference-consistency warnings. Other quantizations and real Klein generation remain unverified.
+130 tests cover this repository. The separately updated companion passed 132 tests. A real RTX 5090 test used Qwen INT8 ConvRot, 13 headshots, BFS, a character LoRA and Viggle v0.2.1 Turbo. The protected result saved successfully; face identity and face-height/center checks passed, with advisory width/reference-consistency warnings. Other quantizations and real Klein generation remain unverified.
+
+## Companion follow-up fixes
+
+The companion also needs corrected Turbo control updates (no nested Gradio skip dictionaries), numeric speed-strength recovery, and CFG support with empty negative text. These companion changes are maintained separately and are not shipped by this repository. Qwen receives native `<image1>`/`<image2>` references and plain instructions. The dedicated engine currently uses Euler, irrespective of Forge sampler selection.

@@ -38,11 +38,12 @@ class ExternalSession(runtime.Session):
         plan = core.build_plan(prompt, negative, cfg, seed, self.owner.choices,
                                self.fs, self.char, cfg_scale,
                                (self.target_pose or {}).get('head_px'), None,
-                               self.owned_aliases, self.target_location)
+                               self.owned_aliases, self.target_location, weighted=False)
         # Dedicated Qwen 2.1 uses references in input order: target, identity.
         # The older native Qwen engine's zero-based remapping does not apply.
-        plan.positive=plan.positive.replace('Picture 1','image1').replace('Picture 2','image2')
-        plan.negative=plan.negative.replace('Picture 1','image1').replace('Picture 2','image2')
+        plan.positive=plan.positive.replace('Picture 1','<image1>').replace('Picture 2','<image2>')
+        plan.negative=plan.negative.replace('Picture 1','<image1>').replace('Picture 2','<image2>')
+        plan.positive=plan.positive.replace('head_swap: use <image1> as the target body and scene; replace its head with the facial identity, eye color and nose structure of <image2>', 'Swap the head of the person in <image1> with the head of the person in <image2>')
         self.plans.append(plan)
         slot, reason = core.select_reference(self.scored, cfg, index, len(self.refs))
         self.selected_ref = slot

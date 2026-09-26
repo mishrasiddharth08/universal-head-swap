@@ -300,7 +300,7 @@ class Plan:
     token_count: int | None = None
     def report(self): return {**asdict(self),'negative_guidance_active':self.cfg!=1.0}
 
-def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=1.0,head_px=None,token_counter=None,owned_aliases=(),target_location=None):
+def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=1.0,head_px=None,token_counter=None,owned_aliases=(),target_location=None,weighted=True):
     cfg=normalize(cfg); rng=random.Random(int(seed)); notes=[]
     owned={clean_name(n).lower() for n in (fs_name,char_name,*owned_aliases) if n}
     extra_tags=[]
@@ -359,7 +359,7 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
         clauses.append('match the original focal sharpness and local contrast; preserve fine skin pores, age texture, individual hair strands and fabric detail; avoid waxy or airbrushed skin')
     weight=1.0+cfg['blend_slider']/200.0
     block='; '.join(clauses)
-    if block: block=f'({block}:{weight:.2f})'
+    if block and weighted: block=f'({block}:{weight:.2f})'
     strength=cfg['lora_strength']
     if cfg['blend_lora_boost'] and cfg['blend_slider']>50: strength*=1+(cfg['blend_slider']-50)/200
     if cfg['tiny_head_boost'] and head_px and head_px<220: strength*=1.08
@@ -551,9 +551,10 @@ class EditRegion:
     crop: Image.Image
 
 def build_region(original,pose,padding=0.55,feather=0.08,mask=None):
+    # Gradio returns an empty editor payload even when no mask was supplied.
+    if isinstance(mask,dict):
+        mask=mask.get('composite') if mask.get('composite') is not None else mask.get('background')
     if mask is not None:
-        if isinstance(mask,dict): mask=mask.get('composite') if mask.get('composite') is not None else mask.get('background')
-        if mask is None: raise ValueError('The custom mask is empty.')
         if not isinstance(mask,Image.Image): mask=rgb_image(mask)
         mask=ImageOps.exif_transpose(mask).convert('L')
         if mask.size!=original.size:

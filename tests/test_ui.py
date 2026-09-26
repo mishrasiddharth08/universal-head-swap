@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import importlib.util
 from pathlib import Path
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -32,11 +32,29 @@ class UIConstructionTests(unittest.TestCase):
         with patch.dict(sys.modules,replacements),patch.dict('os.environ',{'GRADIO_ANALYTICS_ENABLED':'False'}):
             spec.loader.exec_module(ui)
             self.assertIsNone(ui.HOST)
-            with gr.Blocks(analytics_enabled=False):
+            with gr.Blocks(analytics_enabled=False) as demo:
                 script=ui.UniversalHeadSwap()
-                script.after_component(gr.Dropdown(choices=['klein','qwen_image21'],value='klein'),elem_id='forge_ui_preset')
-                script.after_component(gr.Dropdown(choices=['klein-9b'],value='klein-9b'),elem_id='setting_sd_model_checkpoint')
-                controls=script.ui(True)
+                forge=ModuleType('modules_forge')
+                main=ModuleType('modules_forge.main_entry')
+                main.ui_forge_preset=gr.Dropdown(choices=['klein','qwen_image21'],value='klein')
+                main.ui_checkpoint=gr.Dropdown(choices=['klein-9b'],value='klein-9b')
+                forge.main_entry=main
+                # No after_component calls: the real shared controls predate this runner.
+                with patch.dict(sys.modules,{'modules_forge':forge,'modules_forge.main_entry':main}):
+                    controls=script.ui(True)
+                callbacks=[v.fn for v in demo.fns.values() if getattr(v.fn,'__name__','')=='sync_adapter']
+                self.assertEqual(len(callbacks),4)  # load, preset, checkpoint, auto switch
+                entries={name:SimpleNamespace(metadata={}) for name in (
+                    'nested/bfs_head_v1_qwen_2.1',
+                    'nested/bfs_head_v1_flux-klein_9b_step3500_rank128',
+                    'nested/bfs_head_v1_flux-klein_4b')}
+                networks=ModuleType('networks'); networks.list_available_networks=lambda:None
+                with patch.dict(sys.modules,{'networks':networks}),patch.object(ui.runtime,'registry',return_value=entries):
+                    for quant in ('Q4_K_M.gguf','Q8_0.gguf','fp8.safetensors','int8_convrot.safetensors','bf16.safetensors'):
+                        for preset,size,expected in [('qwen_image_2.1',None,'nested/bfs_head_v1_qwen_2.1'),('klein',9,'nested/bfs_head_v1_flux-klein_9b_step3500_rank128'),('klein',4,'nested/bfs_head_v1_flux-klein_4b')]:
+                            checkpoint=f'{preset}-{size}b-{quant}'
+                            self.assertEqual(callbacks[0](preset,checkpoint,True)['value'],expected)
+                    self.assertNotIn('value',callbacks[0]('klein','klein-9b',False))
                 self.assertEqual(len(controls),len(core.ARG_KEYS))
                 self.assertEqual(len({id(c) for c in controls}),len(controls))
                 for c in controls: self.assertIsInstance(c,gr.components.Component)

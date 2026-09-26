@@ -1,41 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" font-family="Segoe UI,Arial,sans-serif">
-  <rect width="960" height="560" rx="12" fill="#0d1117"/>
-  <text x="480" y="42" text-anchor="middle" fill="#e6edf3" font-size="22" font-weight="700">Universal Head Swap — img2img panel</text>
-  <!-- main accordion -->
-  <rect x="40" y="70" width="880" height="70" rx="8" fill="#161b22" stroke="#58a6ff"/>
-  <text x="60" y="98" fill="#58a6ff" font-size="16" font-weight="600">▸ Universal Head Swap</text>
-  <text x="60" y="122" fill="#8b949e" font-size="12">Edit scope: Whole picture / Head only · headshot gallery (up to 20) · Check setup · Edit head mask</text>
-  <!-- quick row -->
-  <rect x="40" y="150" width="880" height="46" rx="8" fill="#161b22" stroke="#30363d"/>
-  <text x="60" y="178" fill="#e6edf3" font-size="13">Quick checks:  ☑ Check head size  ☑ Match face detail   [ Check setup ]  → setup status + preview images</text>
-  <!-- More options -->
-  <rect x="40" y="206" width="880" height="300" rx="8" fill="#161b22" stroke="#30363d"/>
-  <text x="60" y="234" fill="#e6edf3" font-size="14" font-weight="600">▸ More options</text>
-  <!-- tabs -->
-  <g font-size="12.5">
-    <rect x="55" y="248" width="128" height="30" rx="6" fill="#21262d" stroke="#58a6ff"/><text x="119" y="268" fill="#58a6ff" text-anchor="middle">Look</text>
-    <rect x="191" y="248" width="128" height="30" rx="6" fill="#21262d" stroke="#30363d"/><text x="255" y="268" fill="#8b949e" text-anchor="middle">References</text>
-    <rect x="327" y="248" width="128" height="30" rx="6" fill="#1f6feb" stroke="#1f6feb"/><text x="391" y="268" fill="#ffffff" text-anchor="middle" font-weight="700">Adapters ★</text>
-    <rect x="463" y="248" width="128" height="30" rx="6" fill="#1f6feb" stroke="#1f6feb"/><text x="527" y="268" fill="#ffffff" text-anchor="middle" font-weight="700">Memory ★</text>
-    <rect x="599" y="248" width="128" height="30" rx="6" fill="#21262d" stroke="#30363d"/><text x="663" y="268" fill="#8b949e" text-anchor="middle">Detail</text>
-    <rect x="735" y="248" width="160" height="30" rx="6" fill="#21262d" stroke="#30363d"/><text x="815" y="268" fill="#8b949e" text-anchor="middle">Presets and info</text>
-  </g>
-  <!-- Adapters panel content -->
-  <rect x="55" y="292" width="410" height="196" rx="8" fill="#0d1117" stroke="#1f6feb"/>
-  <text x="75" y="318" fill="#e6edf3" font-size="13" font-weight="600">Adapters ★ new tab</text>
-  <text x="75" y="344" fill="#8b949e" font-size="12">Face-swap adapter   [ Auto (match model) ▾ ]   strength 1.00</text>
-  <text x="75" y="368" fill="#8b949e" font-size="12">Character adapter   [ None (skip) ▾ ]         strength 1.00</text>
-  <text x="75" y="392" fill="#8b949e" font-size="12">Character trigger   [____________________]</text>
-  <text x="75" y="416" fill="#8b949e" font-size="12">☑ Check adapter compatibility    [ Refresh adapter list ]</text>
-  <text x="75" y="444" fill="#3fb950" font-size="11.5">Auto matches a registered BFS adapter to the loaded model:</text>
-  <text x="75" y="462" fill="#3fb950" font-size="11.5">Klein 4B/9B or Qwen Image Edit. Families never cross-load.</text>
-  <!-- Memory panel content -->
-  <rect x="485" y="292" width="410" height="196" rx="8" fill="#0d1117" stroke="#1f6feb"/>
-  <text x="505" y="318" fill="#e6edf3" font-size="13" font-weight="600">Memory ★ new tab</text>
-  <text x="505" y="344" fill="#8b949e" font-size="12">Max reference side  [ 1024 ▾ ]   Budget  [ 6.0 MP ]</text>
-  <text x="505" y="368" fill="#8b949e" font-size="12">☑ Reuse unchanged encodings (256 MiB cache)</text>
-  <text x="505" y="392" fill="#8b949e" font-size="12">☑ More reference detail for small heads</text>
-  <text x="505" y="420" fill="#3fb950" font-size="11.5">Device-aware: NVIDIA · AMD ROCm · CPU. OOM retry once at</text>
-  <text x="505" y="438" fill="#3fb950" font-size="11.5">75% side and 0.6× budget. Limits cover both references.</text>
-  <text x="480" y="536" text-anchor="middle" fill="#8b949e" font-size="12">★ = new in v1.0 · same features in Klein and Qwen modes · no Forge core edits</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" font-family="Segoe UI,Arial,sans-serif"><rect width="960" height="620" rx="16" fill="#0d1117"/><text x="36" y="46" fill="#e6edf3" font-size="24">Universal Head Swap</text><text x="36" y="74" fill="#8b949e" font-size="14">Setup first. Advanced controls in focused tabs. Layout illustration.</text>
+<rect x="30" y="96" width="144" height="42" rx="7" fill="#1f6feb"/><text x="102" y="123" text-anchor="middle" fill="#ffffff" font-size="13">Setup</text>
+<rect x="180" y="96" width="144" height="42" rx="7" fill="#21262d"/><text x="252" y="123" text-anchor="middle" fill="#ffffff" font-size="13">Appearance</text>
+<rect x="330" y="96" width="144" height="42" rx="7" fill="#21262d"/><text x="402" y="123" text-anchor="middle" fill="#ffffff" font-size="13">Quality &amp; mask</text>
+<rect x="480" y="96" width="144" height="42" rx="7" fill="#21262d"/><text x="552" y="123" text-anchor="middle" fill="#ffffff" font-size="13">Speed &amp; memory</text>
+<rect x="630" y="96" width="144" height="42" rx="7" fill="#21262d"/><text x="702" y="123" text-anchor="middle" fill="#ffffff" font-size="13">Saved setups</text>
+<rect x="780" y="96" width="144" height="42" rx="7" fill="#21262d"/><text x="852" y="123" text-anchor="middle" fill="#ffffff" font-size="13">Report</text>
+<rect x="30" y="165" width="900" height="76" rx="9" fill="#161b22" stroke="#30363d"/><text x="50" y="192" fill="#e6edf3" font-size="16">Head-swap LoRA (BFS)</text><text x="50" y="219" fill="#8b949e" font-size="14">Auto matches Qwen 2.1 / Klein 4B / Klein 9B</text>
+<rect x="30" y="255" width="900" height="76" rx="9" fill="#161b22" stroke="#30363d"/><text x="50" y="282" fill="#e6edf3" font-size="16">Character LoRA (optional)</text><text x="50" y="309" fill="#8b949e" font-size="14">Select a character LoRA and its strength</text>
+<rect x="30" y="345" width="900" height="76" rx="9" fill="#161b22" stroke="#30363d"/><text x="50" y="372" fill="#e6edf3" font-size="16">Editing mode</text><text x="50" y="399" fill="#8b949e" font-size="14">Whole picture or protected head only</text>
+<rect x="30" y="435" width="900" height="76" rx="9" fill="#161b22" stroke="#30363d"/><text x="50" y="462" fill="#e6edf3" font-size="16">Reference headshots</text><text x="50" y="489" fill="#8b949e" font-size="14">Drop up to 20 images here</text>
+<text x="36" y="558" fill="#58a6ff" font-size="16">Check setup · preview selected headshot and edit area</text><text x="36" y="588" fill="#8b949e" font-size="14">Use Forge Generate to run. Existing advanced features remain available.</text></svg>

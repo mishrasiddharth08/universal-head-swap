@@ -51,7 +51,7 @@ a{color:var(--accent)}
   <div class="badges">
     <span class="badge"><b>v1.0</b></span>
     <span class="badge">Forge Neo (classic)</span>
-    <span class="badge"><b>128</b> offline tests passing</span>
+    <span class="badge"><b>130</b> offline tests passing</span>
     <span class="badge">NVIDIA · AMD ROCm · CPU</span>
     <span class="badge">MIT</span>
   </div>
@@ -95,7 +95,7 @@ a{color:var(--accent)}
   <li><b>Check setup</b> — the preview shows the selected reference, edit area and the fully resolved prompt before any generation.</li>
   <li><b>Generate</b> with Forge's normal button. Inspect <b>Show last generation report</b>, then check the output at 100% zoom.</li>
 </ol>
-<img src="docs/ui-panel.svg" alt="Panel layout: main accordion, quick checks, More options with Look, References, Adapters, Memory, Detail, Presets tabs" style="width:100%;border:1px solid var(--border);border-radius:10px;margin-top:1rem">
+<img src="docs/ui-panel.svg" alt="Six-tab layout with head-swap BFS and character LoRA selectors visible in Setup" style="width:100%;border:1px solid var(--border);border-radius:10px;margin-top:1rem">
 
 <h2 id="install">Install</h2>
 <pre><code>cd &lt;forge&gt;/extensions
@@ -125,6 +125,7 @@ git clone https://github.com/mishrasiddharth08/universal-head-swap
 
 <section><h2>Runtime update · September 26, 2026</h2><p>Automatic adapter matching follows the loaded Klein 4B, Klein 9B or Qwen Image Edit model when Auto is selected. Qwen references now preserve their original colors and remain on CPU until needed. Quantization and model offloading follow Forge. Qwen INT8 ConvRot was subsequently GPU-tested with BFS, character and Turbo LoRAs; other combinations remain unverified.</p></section>
 <section><h2>Dedicated Qwen 2.1 integration</h2><p>Head Swap now connects directly to the Project Invisible Qwen 2.1 engine. Automatic selection follows preset and checkpoint changes, including BFS adapters in subfolders. Your headshots form a selection pool; each output uses its target and chosen headshot. BFS, a character LoRA and Viggle Turbo were tested together on INT8 ConvRot. Protected-head mode preserves the surrounding picture, and completed files report their saved location.</p><p>Restart Forge after updating both extensions. Other quantizations and actual Klein generation still need individual GPU validation; face-match checks remain advisory.</p></section>
+<section><h2>Clean tabbed UI and reliability fixes</h2><p>Setup now shows both BFS and character LoRA selectors. Appearance, Quality &amp; mask, Speed &amp; memory, Saved setups and Report keep advanced controls organized. Automatic matching binds Forge shared model controls directly. Empty mask editors now use automatic head detection. Update the separate Qwen companion for Turbo-slider and guidance fixes, then restart Forge.</p><p>130 Head Swap tests and 132 companion tests passed. The dedicated Qwen engine uses Euler; Res Multistep/Beta and every quantization have not been GPU-validated.</p></section>
 <div class="thanks">
   <h2>❤️ Special thanks</h2>
   <ul>

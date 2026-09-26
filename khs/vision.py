@@ -9,13 +9,14 @@ from .core import BoundedCache,image_hash
 class FaceAnalyzer:
     def __init__(self,model_path):
         self.model_path=Path(model_path); self.engine=None; self.mode=None; self.error=''
+        self.fallback_detector=None
         self.lock=threading.RLock(); self.cache=BoundedCache(2*1024**2)
     def close(self):
         with self.lock:
             if self.engine is not None:
                 try: self.engine.close()
                 except Exception: pass
-            self.engine=None; self.mode=None; self.error=''; self.cache.clear()
+            self.engine=None; self.fallback_detector=None; self.mode=None; self.error=''; self.cache.clear()
     def start(self):
         if self.engine is not None: return
         if self.error: return
@@ -68,7 +69,34 @@ class FaceAnalyzer:
                 roll=math.degrees(math.atan2(ey,ex)); source='2D estimate'
             faces.append(dict(box=box,head_px=max(fw,fh),head_ratio=fh/h,head_h=fh,head_w=fw,
                               yaw=yaw,pitch=pitch,roll=roll,pose_source=source))
-        return faces
+        return faces or self._fallback(im)
+    def _fallback(self,im):
+        """CPU fallback for sunglasses/profile faces missed by the landmarker."""
+        path=self.model_path.parent/'face_detection_yunet_2023mar.onnx'
+        if not path.is_file(): return []
+        try:
+            import cv2
+            if self.fallback_detector is None:
+                self.fallback_detector=cv2.FaceDetectorYN_create(str(path),'',(320,320),0.8,0.3,5000,
+                    cv2.dnn.DNN_BACKEND_OPENCV,cv2.dnn.DNN_TARGET_CPU)
+            self.fallback_detector.setInputSize(im.size)
+            _,rows=self.fallback_detector.detect(np.ascontiguousarray(np.asarray(im.convert('RGB'))[:,:,::-1]))
+            if rows is None: return []
+            faces=[]; w,h=im.size
+            for row in rows:
+                x,y,fw,fh=map(float,row[:4])
+                box=(max(0,x),max(0,y),min(w,x+fw),min(h,y+fh))
+                fw=box[2]-box[0]; fh=box[3]-box[1]
+                if min(fw,fh)<8: continue
+                eyes=sorted([(float(row[4]),float(row[5])),(float(row[6]),float(row[7]))])
+                ex=eyes[1][0]-eyes[0][0]; ey=eyes[1][1]-eyes[0][1]; distance=max(1,math.hypot(ex,ey))
+                yaw=math.degrees(math.atan2(float(row[8])-(eyes[0][0]+eyes[1][0])/2,distance))
+                pitch=math.degrees(math.atan2(float(row[9])-(eyes[0][1]+eyes[1][1])/2,distance))-12
+                faces.append(dict(box=box,head_px=max(fw,fh),head_ratio=fh/h,head_h=fh,head_w=fw,
+                    yaw=yaw,pitch=pitch,roll=math.degrees(math.atan2(ey,ex)),pose_source='YuNet 2D estimate'))
+            return faces
+        except (ImportError,RuntimeError,ValueError): return []
+
     def faces(self,im):
         key=image_hash(im)
         with self.lock:
