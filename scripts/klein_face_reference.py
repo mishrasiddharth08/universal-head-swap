@@ -15,6 +15,56 @@ from modules.ui_components import InputAccordion
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path: sys.path.insert(0,str(ROOT))
+
+def _reload_extension_helpers():
+    from modules import script_callbacks
+    try:
+        from modules import shared
+    except ImportError:  # minimal unit-test host
+        shared=SimpleNamespace(state=SimpleNamespace(job=''))
+    try:
+        from modules import script_loading
+    except ImportError:  # minimal unit-test host
+        script_loading=None
+    remove=getattr(script_callbacks,'remove_current_script_callbacks',None)
+    if callable(remove): remove()
+    # Never close analyzers or replace the live bridge during a generation.
+    # A later idle Reload UI will apply the new helper files safely.
+    if bool(getattr(shared.state,'job','')):
+        print('[UniversalHeadSwap] Generation active; helper reload deferred until the next Reload UI.')
+        return
+    current=Path(__file__).resolve()
+    old=None
+    loaded=getattr(script_loading,'loaded_scripts',{}) if script_loading is not None else {}
+    for filename,module in list(loaded.items()):
+        try:
+            if Path(filename).resolve()==current:
+                old=module;break
+        except (OSError,TypeError):
+            continue
+    if old is not None and callable(getattr(old,'unload',None)):
+        old.unload()
+    # Recover even if an earlier load failed before registering its unload.
+    try:
+        from modules import processing
+        active=processing.process_images_inner
+        while getattr(active,'_khs_bridge',False):
+            active=active._khs_original
+        processing.process_images_inner=active
+    except (AttributeError,ImportError):
+        pass
+    # Preserve module object identity so any unrelated outer wrapper that
+    # still references the UHS bridge observes refreshed globals. The normal
+    # top-level bridge was removed above and is installed once below.
+    import importlib
+    order=('khs.negative_catalog','khs.data','khs.core','khs.moire','khs.saving',
+           'khs.vision','khs.identity','khs.runtime','khs.external')
+    for name in order:
+        module=sys.modules.get(name)
+        if module is not None:
+            importlib.reload(module)
+
+_reload_extension_helpers()
 from khs import core, runtime, saving, identity
 from khs.vision import FaceAnalyzer
 
@@ -82,31 +132,32 @@ class UniversalHeadSwap(scripts.Script):
                 gr.Markdown('**Unavailable:** '+BRIDGE_ERROR); C['enable'].interactive=False
             if self.custom_error: gr.Markdown('**Custom preset warning:** '+self.custom_error)
             with gr.Tabs() as tabs:
-                with gr.Tab('Setup',id='setup'):
-                    gr.Markdown('**LoRAs** · Auto selects BFS for your model. Choose your character LoRA below if needed.')
+                with gr.Tab('Swap',id='setup'):
                     with gr.Row():
-                        check('auto_model_adapter','Auto-select head-swap LoRA')
-                        drop('lora_dropdown','Head-swap LoRA (BFS)',['Auto (match model)']+names)
-                        slide('lora_strength','Head-swap strength',0.05,2,0.05)
+                        with gr.Column(scale=1):
+                            C['headshots']=gr.Gallery(label='Headshots',columns=4,height=220,type='filepath',format='png',interactive=True,allow_preview=True)
+                        with gr.Column(scale=1):
+                            drop('lora_dropdown','Head-swap LoRA (BFS)',['Auto (match model)']+names)
+                            check('auto_model_adapter','Match BFS to selected model automatically')
+                            drop('char_lora_name','Character LoRA (optional)',['None (skip)']+names)
+                            with gr.Accordion('LoRA strengths and trigger',open=False):
+                                slide('lora_strength','BFS strength',0.05,2,0.05)
+                                slide('char_lora_strength','Character strength',-2,2,0.05)
+                                text('char_lora_trigger','Character trigger words')
+                                check('strict_adapter','Check model compatibility')
+                            refresh=gr.Button('Refresh LoRAs',size='sm')
+                    C['edit_scope']=gr.Radio(choices=[('Head only · keep scene','Protected head edit'),('Whole image · restyle','Full image edit')],value=defaults['edit_scope'],label='Edit area')
                     with gr.Row():
-                        drop('char_lora_name','Character LoRA (optional)',['None (skip)']+names)
-                        slide('char_lora_strength','Character strength',-2,2,0.05)
-                    text('char_lora_trigger','Character trigger words')
-                    check('strict_adapter','Check face-swap adapter compatibility')
-                    refresh=gr.Button('Refresh adapter list',size='sm')
-                    gr.Markdown('Auto matches a registered BFS adapter to the loaded model: Klein 4B/9B or Qwen Image Edit.')
-                    C['edit_scope']=gr.Radio(choices=[('Whole picture · swap + cleanup','Full image edit'),
-                        ('Head only · protect the rest','Protected head edit')],value=defaults['edit_scope'],label='Editing mode')
-                    C['headshots']=gr.Gallery(label='Reference headshots · up to 20',columns=5,height=165,type='pil',format='png',interactive=True,allow_preview=True)
-                    summary=gr.Markdown('**Cleanup:** remove tattoos, piercings, forehead marks and jewelry. **Negative prompts active.**')
-                    with gr.Row():
-                        analyze=gr.Button('Check setup',variant='primary')
-                        edit_mask=gr.Button('Edit head mask',visible=False)
-                    C['ratio_status']=gr.Textbox(label='Setup status',value='Add headshots, then check the selected reference and edit area.',interactive=False,lines=1)
-                    with gr.Accordion('Setup preview',open=False) as preview_section:
+                        identity_setup=gr.Button('Identity only · clear style changes',variant='primary')
+                        analyze=gr.Button('Preview setup')
+                        edit_mask=gr.Button('Edit mask',visible=False)
+                        whole_cleanup=gr.Button('Enable whole-image cleanup',visible=defaults['edit_scope']=='Protected head edit' and any(defaults.get('ban_'+k)=='Remove' for k in ('tattoos','piercings','cross','jewelry')))
+                    C['ratio_status']=gr.Textbox(label='Status',value='Add headshots. Use Forge Generate when ready.',interactive=False,lines=1)
+                    with gr.Accordion('Preview and active settings',open=False) as preview_section:
+                        summary=gr.Markdown('Check the active appearance settings before generating.')
                         with gr.Row():
-                            preview_image=gr.Image(label='Target and edit area',type='pil',format='png',height=250,interactive=False)
-                            preview_ref=gr.Image(label='Selected reference',type='pil',format='png',height=250,interactive=False)
+                            preview_image=gr.Image(label='Edit area',type='pil',format='png',height=220,interactive=False)
+                            preview_ref=gr.Image(label='Selected headshot',type='pil',format='png',height=220,interactive=False)
                     with gr.Accordion('Reference selection',open=False):
                         with gr.Row():
                             drop('pick_mode','Selection',['Best match (smart, no rotation)','Rotate good matches','Always rotation'])
@@ -120,6 +171,7 @@ class UniversalHeadSwap(scripts.Script):
                         check('seed_lock','Reuse the first seed for this target')
                 with gr.Tab('Appearance',id='look'):
                     gr.Markdown('**Cleanup preferences**')
+                    gr.Markdown('**Body cleanup is outside the automatic head mask.** For body tattoos or jewelry, open Edit mask and paint those areas white, or select Whole image.')
                     labels={'bindi':'Forehead marks / sindoor','earrings':'Earrings','tattoos':'Tattoos / henna',
                             'piercings':'Body piercings','cross':'Cross symbols','jewelry':'Other jewelry'}
                     for row in (('tattoos','piercings','bindi'),('earrings','jewelry','cross')):
@@ -148,6 +200,7 @@ class UniversalHeadSwap(scripts.Script):
                         check('neg_prompt_enable','Append additional negatives')
                         text('neg_prompt_text','Additional negative prompt',lines=3)
                 with gr.Tab('Quality & mask',id='detail'):
+                    check('qwen_detail_crop','Qwen: focus generation on the head for more detail')
                     with gr.Row():
                         check('geometry_match','Check original head size and position')
                         check('match_sharpness','Match original face detail')
@@ -166,7 +219,10 @@ class UniversalHeadSwap(scripts.Script):
                         C['custom_mask']=gr.ImageEditor(label='Optional edit mask',type='pil',image_mode='RGB',height=300,
                             brush=gr.Brush(colors=['#ffffff','#000000'],color_mode='fixed'),format='png',
                             sources=['upload','clipboard'],transforms=[])
-                        mask_button=gr.Button('Create mask from detected head')
+                        with gr.Row():
+                            mask_button=gr.Button('Create mask from detected head')
+                            clear_mask=gr.Button('Clear mask · use automatic detection')
+                        clear_mask.click(lambda:None,outputs=C['custom_mask'],queue=False)
                         with gr.Row():
                             slide('crop_padding','Context around head',0.2,1.5,0.05)
                             slide('mask_feather','Blend edge softness',0,0.25,0.01)
@@ -189,35 +245,38 @@ class UniversalHeadSwap(scripts.Script):
                             drop('latent_kernel_size','Latent sharpening kernel',['3x3','5x5','7x7','9x9','15x15'])
                         check('blend_lora_boost','Boost adapter above instruction strength 50')
                         check('tiny_head_boost','Small-head adapter boost')
-                with gr.Tab('Speed & memory',id='memory'):
-                    with gr.Row():
-                        drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
-                        slide('reference_budget','Combined reference budget · megapixels',0.5,8,0.25)
-                    with gr.Row():
-                        check('cache_encodes','Reuse unchanged encodings')
-                        check('auto_adapt','Allow more reference detail for small heads')
-                    gr.Markdown('Limits cover both references. Sampling memory also depends on the main Forge image size.')
-                with gr.Tab('Saved setups',id='presets'):
-                    try: presets=core.load_presets(ROOT/'scripts/headswap_presets.json')
-                    except Exception as e: presets={}; gr.Markdown('**Preset error:** '+str(e))
-                    with gr.Row():
-                        C['preset_dropdown']=gr.Dropdown(choices=list(presets),label='Saved setup',value=None)
-                        C['preset_save_name']=gr.Textbox(label='New preset name')
-                    with gr.Row():
-                        C['preset_save_btn']=gr.Button('Save current setup')
-                        C['preset_delete_btn']=gr.Button('Delete selected preset')
-                    preset_status=gr.Textbox(label='Preset status',interactive=False,lines=1)
-                    gr.Markdown('Includes character adapter settings. Images and masks are excluded. Review cleanup choices after loading older presets.')
-                with gr.Tab('Report',id='report'):
-                    C['blend_preview']=gr.Textbox(label='Resolved next-image prompt',lines=9,interactive=False)
-                    gr.Markdown('Reads plain img2img. Seed −1 shows a labeled example. For Batch/Inpaint, the actual generation report is authoritative.')
-                    last_run=gr.Button('Show last generation report')
-                    C['pos_status']=gr.Textbox(label='Last generation summary',lines=4,interactive=False)
-                    analysis_json=gr.JSON(label='Detailed report')
-                    check('no_ref_diag','Diagnostic generation without references')
+                with gr.Tab('Settings',id='settings'):
+                    with gr.Accordion('Speed & memory',open=False):
+                        with gr.Row():
+                            drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
+                            slide('reference_budget','Combined reference budget · megapixels',0.5,8,0.25)
+                        with gr.Row():
+                            check('cache_encodes','Reuse unchanged encodings')
+                            check('auto_adapt','Allow more reference detail for small heads')
+                        gr.Markdown('Limits cover both references. Sampling memory also depends on the main Forge image size.')
+                    with gr.Accordion('Saved setups',open=False):
+                        try: presets=core.load_presets(ROOT/'scripts/headswap_presets.json')
+                        except Exception as e: presets={}; gr.Markdown('**Preset error:** '+str(e))
+                        with gr.Row():
+                            C['preset_dropdown']=gr.Dropdown(choices=list(presets),label='Saved setup',value=None)
+                            C['preset_save_name']=gr.Textbox(label='New preset name')
+                        with gr.Row():
+                            C['preset_save_btn']=gr.Button('Save current setup')
+                            C['preset_delete_btn']=gr.Button('Delete selected preset')
+                        preset_status=gr.Textbox(label='Preset status',interactive=False,lines=1)
+                        gr.Markdown('Includes character adapter settings. Images and masks are excluded. Review cleanup choices after loading older presets.')
+                    with gr.Accordion('Generation report',open=False):
+                        C['blend_preview']=gr.Textbox(label='Resolved next-image prompt',lines=9,interactive=False)
+                        gr.Markdown('Reads plain img2img. Seed −1 shows a labeled example. For Batch/Inpaint, the actual generation report is authoritative.')
+                        last_run=gr.Button('Show last generation report')
+                        C['pos_status']=gr.Textbox(label='Last generation summary',lines=4,interactive=False)
+                        analysis_json=gr.JSON(label='Detailed report')
+                        check('no_ref_diag','Diagnostic generation without references')
             for key in core.ARG_KEYS:
                 if key not in C: C[key]=gr.Checkbox(value=bool(defaults.get(key)),visible=False,label='Legacy '+key)
             all_inputs=[C[k] for k in core.ARG_KEYS]; save_inputs=[C[k] for k in core.SAVE_KEYS]
+            identity_keys=list(core.identity_setup())
+            identity_setup.click(lambda:[gr.update(value=v) for v in core.identity_setup().values()],outputs=[C[k] for k in identity_keys],queue=False)
             policy_keys=['ban_'+k for k in core.APPEARANCE]
             def summarize(scope,channel,*policies):
                 removed=[labels[key] for key,value in zip(core.APPEARANCE,policies) if value=='Remove']
@@ -225,15 +284,22 @@ class UniversalHeadSwap(scripts.Script):
                 cleanup='Remove: '+', '.join(removed) if removed else 'Automatic removal off; using your appearance choices'
                 fast='Positive-only' in str(channel)
                 note='**Negative prompts OFF at CFG 1.0.**' if fast else '**Negative prompts active.**'
-                return f'**{place}.** {cleanup}. {note}',gr.update(visible=scope=='Protected head edit')
+                body_remove = any(value == 'Remove' for key, value in zip(core.APPEARANCE, policies)
+                                  if key in {'tattoos', 'piercings', 'cross', 'jewelry'})
+                warning = (' **Body cleanup is outside the automatic head mask. Open Edit mask and paint those areas white, or select Whole image.**'
+                           if scope == 'Protected head edit' and body_remove else '')
+                return (f'**{place}.** {cleanup}. {note}{warning}',
+                        gr.update(visible=scope=='Protected head edit'),
+                        gr.update(visible=scope=='Protected head edit' and body_remove))
             summary_inputs=[C['edit_scope'],C['ban_channel']]+[C[k] for k in policy_keys]
-            for component in summary_inputs: component.change(summarize,inputs=summary_inputs,outputs=[summary,edit_mask],queue=False)
+            for component in summary_inputs: component.change(summarize,inputs=summary_inputs,outputs=[summary,edit_mask,whole_cleanup],queue=False)
             def guidance(channel):
                 return ('**Your negative prompts are ignored at CFG 1.0.** Use Positive + Negative for removal negatives.'
                     if 'Positive-only' in str(channel) else 'Negative prompts active. Effective CFG is at least 1.1; additional guidance can take longer.')
             C['ban_channel'].change(guidance,inputs=C['ban_channel'],outputs=guidance_note,queue=False)
             use_negatives.click(lambda:gr.update(value='Positive + Negative (uses at least CFG 1.1)'),outputs=C['ban_channel'],queue=False)
             edit_mask.click(lambda:(gr.update(selected='detail'),gr.update(open=True)),outputs=[tabs,mask_section],queue=False)
+            whole_cleanup.click(lambda:(gr.update(value='Full image edit'),gr.update(value=True)),outputs=[C['edit_scope'],C['removal_priority']],queue=False)
             def sync_adapter(preset,checkpoint,automatic):
                 if not automatic: return gr.update()
                 key=str(preset).lower()
@@ -300,7 +366,7 @@ class UniversalHeadSwap(scripts.Script):
                 mask_button.click(make_mask,inputs=[required[0],C['target_face'],C['crop_padding']],outputs=C['custom_mask'])
             else:
                 analyze.interactive=False
-                C['ratio_status'].value='Batch mode: see the Report tab after generation.'
+                C['ratio_status'].value='Batch mode: results appear under Settings → Generation report.'
         self.ui_controls=C
         return [C[k] for k in core.ARG_KEYS]
 
@@ -328,7 +394,7 @@ class UniversalHeadSwap(scripts.Script):
             plan=core.build_plan(prompt,negative,cfg,fixed,self.choices,fs,char,float(guidance),(pose or {}).get('head_px'),runtime.token_counter(HOST.shared.sd_model),aliases,location)
             overlay=im.copy()
             if cfg['edit_scope']=='Protected head edit':
-                region=core.build_region(im,pose,cfg['crop_padding'],cfg['mask_feather'],cfg['custom_mask'])
+                region=core.build_region(im,pose,cfg['crop_padding'],cfg['mask_feather'],cfg['custom_mask'],preserve_hair=not any(cfg.get(k) for k in ('hairstyle','hair_color','rand_hairstyle','rand_hair_color')))
                 overlay=Image.composite(Image.blend(im,Image.new('RGB',im.size,(50,200,120)),0.35),im,region.mask)
                 ImageDraw.Draw(overlay).rectangle(region.box,outline=(50,255,150),width=max(2,im.width//400))
             elif pose: ImageDraw.Draw(overlay).rectangle(pose['box'],outline=(50,255,150),width=max(2,im.width//400))

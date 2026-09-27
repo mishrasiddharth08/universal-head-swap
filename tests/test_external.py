@@ -4,7 +4,7 @@ from unittest.mock import patch
 from PIL import Image
 import test_runtime as fixtures
 from khs import core, runtime
-from khs.external import ExternalSession
+from khs.external import BFS_QWEN21_TRIGGER, ExternalSession
 
 
 class ExternalTests(unittest.TestCase):
@@ -28,6 +28,9 @@ class ExternalTests(unittest.TestCase):
             self.assertEqual(len(s.refs),13)
             self.assertEqual(len(refs),2)
             self.assertIn('<image1>',plan.positive); self.assertIn('<image2>',plan.positive)
+            self.assertIn(BFS_QWEN21_TRIGGER,plan.positive)
+            self.assertIn('start <image1> as base image',plan.positive)
+            self.assertIn('head from <image2>',plan.positive)
             self.assertNotIn('(head_swap:',plan.positive)
             self.assertIn('<lora:turbo:1>',plan.positive)
             self.assertIn('<lora:bfs_head_v1_qwen_2.1:',plan.positive)
@@ -40,6 +43,19 @@ class ExternalTests(unittest.TestCase):
         self.assertEqual((p.width,p.height),dimensions)
         self.assertEqual(p.batch_size,2)
         self.assertEqual(host.dynamic.ref_latents,original_dynamic)
+
+    def test_qwen_workload_caps_oversized_requests(self):
+        s,p,host=self.session(1)
+        p.width=p.height=2048
+        s.cfg.update(resolution_dropdown='2048',reference_budget=8,auto_adapt=True)
+        try:
+            s.enter()
+            _,refs=s.prepare(0,'swap','',7,1)
+            self.assertLessEqual(p.width*p.height,786432)
+            self.assertLessEqual(sum(im.width*im.height for im in refs),1250000)
+            self.assertLessEqual(max(max(im.size) for im in refs),768)
+        finally:s.close()
+        self.assertEqual((p.width,p.height),(2048,2048))
 
     def test_reference_rotation_and_manual_slot(self):
         s,p,host=self.session()
@@ -84,6 +100,26 @@ class ExternalTests(unittest.TestCase):
             self.assertEqual(result.getpixel((0,0)),s.original.getpixel((0,0)))
             self.assertGreater(result.getpixel((125,125))[0],200)
         finally: s.close()
+
+    def test_detail_crop_protects_scene_and_restores_dimensions(self):
+        from PIL import ImageDraw
+        s,p,host=self.session(1)
+        original=p.init_images; dimensions=(p.width,p.height)
+        s.cfg.update(edit_scope='Protected head edit',qwen_detail_crop=True)
+        mask=Image.new('L',s.original.size)
+        ImageDraw.Draw(mask).rectangle((90,90,160,160),fill=255)
+        s.cfg['custom_mask']=mask
+        try:
+            s.enter()
+            self.assertIsNone(s.external_canvas_size)
+            s.prepare(0,'swap','',7,1)
+            result=s.finish_image(Image.new('RGB',s.canvas_size,'red'),0)
+            self.assertEqual(result.size,s.original.size)
+            self.assertEqual(result.getpixel((0,0)),s.original.getpixel((0,0)))
+            self.assertGreater(result.getpixel((125,125))[0],200)
+        finally:s.close()
+        self.assertIs(p.init_images,original)
+        self.assertEqual((p.width,p.height),dimensions)
 
     def test_turbo_tags_are_detected_without_matching_ordinary_text(self):
         self.assertTrue(core.has_speed_lora('<lora:folder/klein_9B_Turbo_r128:1>'))

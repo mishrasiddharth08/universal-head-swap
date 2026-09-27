@@ -12,7 +12,7 @@
 - **Turbo and saving:** tested Qwen BFS + character + Viggle Turbo on INT8 ConvRot; the companion engine verifies saved files and reports their paths.
 - **Optional face-match checks:** bounded CPU checks appear in the generation report; review likeness visually too.
 
-**130 Head Swap tests passed.** The companion Qwen suite passed 132 tests. Real GPU testing used 13 headshots on an RTX 5090; other quantizations and a real Klein run remain unverified.
+**135 Head Swap tests passed.** The companion Qwen suite passed 132 tests. Real GPU testing used 13 headshots on an RTX 5090; other quantizations and a real Klein run remain unverified.
 
 **Qwen users must update both extensions and restart Forge.** An older Project Invisible Qwen engine bypasses Head Swap. See [the companion integration requirement](docs/QWEN21_INTEGRATION.md). Details: [change history](CHANGELOG.md).
 
@@ -27,7 +27,7 @@ This is an independent community extension, not an official product. Inspect eve
 
 - **FLUX.2 Klein 4B/9B:** inherited from the validated v6 codebase; reference latents, size-matched BFS adapters.
 - **Qwen 2.1:** dedicated Project Invisible bridge, target/reference ordering and protected editing verified with INT8 ConvRot, BFS, a character LoRA and Viggle Turbo. The older native Qwen route has separate reference handling.
-- **Organized controls:** six focused tabs, with both LoRA selectors visible in Setup.
+- **Organized controls:** four compact tabs, with headshots and LoRA selectors together in Swap.
 - **Memory:** device-aware probing (never assumes GPU 0), bounded reference budgets, one OOM retry, 256 MiB encode cache.
 - **Quantization:** all modern formats through Forge's own loaders; LoRAs stay on the runtime side path, never merged into quantized weights.
 - **No Forge core edits:** delete the extension folder and Forge is 100% stock.
@@ -67,14 +67,12 @@ Everything lives inside Forge's normal img2img view. The extension adds a single
 
 Inside the panel:
 
-- **Setup** — visible head-swap BFS and optional character LoRA selectors, strengths, trigger words, headshots, editing mode and reference selection.
+- **Swap** — visible head-swap BFS and optional character LoRA selectors, strengths, trigger words, headshots, editing mode and reference selection.
 - **Appearance** — cleanup, hairstyle, expression and prompt controls.
 - **Quality & mask** — proportions, detail, masks, finishing and optional enhancements.
-- **Speed & memory** — reference budgets and encoding reuse.
-- **Saved setups** — save, load and delete settings.
-- **Report** — resolved prompt and generation diagnostics.
+- **Settings** — memory limits, saved setups and generation reports.
 
-Leave Auto enabled for matching BFS selection. Disable it to choose a head-swap LoRA manually. Choose the character LoRA separately in Setup.
+Leave Auto enabled for matching BFS selection. Disable it to choose a head-swap LoRA manually. Choose the character LoRA separately in Swap.
 
 ## Step-by-step usage
 
@@ -162,3 +160,25 @@ Restart Forge completely after the current batch finishes to load both updated e
 ### Qwen quality starting point
 
 For likeness checks, start with 20 steps, CFG 3 and Turbo off in Qwen controls, BFS strength 1.0, protected-head mode and no random appearance changes. Main sampling settings are separate from saved Head Swap setups. The dedicated Qwen engine uses Euler; Forge sampler selections do not currently enable Res Multistep/Beta there. See VALIDATION.md for measured results and limits.
+
+### Identity and memory
+
+Click **Identity only** to clear appearance overrides and enable protected Qwen head-crop generation. This preserves selected LoRAs and headshots. Headshots are file-backed; CPU copies are limited to 1536 pixels per side. The recipe limits encoded references to 1.25 megapixels. It does not override main Forge sampling settings or guarantee a fixed total VRAM peak. Start with 20 steps, CFG 3 and Turbo off for quality comparisons.
+
+## 2026-09-27 — Qwen head-swap repair
+
+- Preserve the trained BFS `head_swap:` trigger and target/reference order.
+- Default to protected head editing and a focused Qwen crop. Existing custom presets remain available; use **Identity only · clear style changes** to remove old hair, age, makeup and scene edits.
+- Skip the companion's global DeGrid pass during head swap; the extension's optional cleanup remains available.
+- Reject head alignment that improves one measurement while worsening width or position.
+- Qwen profiles 6/8 use smaller generation/reference crops while retaining the original output canvas. They trade speed and system RAM for lower GPU memory.
+- Character LoRA/LoKr loading is logged by filename, strength and matched-layer count. No claim is made for every adapter or quantization.
+
+
+### Small GPU decoding
+
+Both 6 and 8 GB profiles try GPU decoding first and can recover using CPU decoding if needed. Protected head-swap crops are capped at 416 pixels for 6 GB and 640 pixels for 8 GB; the original full image dimensions are retained. Both use the original VAE without spatial tiling; sufficient system RAM is required. These profiles prioritize fitting in memory over maximum speed. Other GPU applications can change available memory during a run.
+
+### Hair edges and body cleanup
+
+Protected identity editing keeps the original hairstyle and uses a smaller face mask unless hairstyle/color changes are requested. This reduces seams from mixing new upper hair with old lower strands. Identity only retains your Remove choices. For navel piercings, body tattoos or other marks outside the head, use **Enable whole-image cleanup** or paint those areas in the custom mask. Whole-image cleanup can change body and scene detail; inspect the result. See VALIDATION.md for measured results and limits.

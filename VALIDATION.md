@@ -132,3 +132,24 @@ Restart Forge completely after the current batch finishes to load both updated e
 - Restart Forge and reload the browser to use Python/UI fixes. For the local quality setup use 20 steps, CFG 3 and disable Turbo in Qwen controls; a Head Swap preset does not change those main controls.
 
 - Reorganized controls into Setup, Appearance, Quality & mask, Speed & memory, Saved setups and Report tabs. Head-swap BFS and optional character LoRA selectors are visible in Setup. Empty Gradio mask payloads now use automatic detection; deliberately black masks still fail safely. Advanced features and argument order are preserved.
+
+- Fixed batch aborts caused by Gradio returning an untouched/cleared 800x600 black mask canvas. Blank editor masks now use detected-head protection; no detected face still fails safely, and painted masks remain honored. Added Clear mask and regression checks for opaque black, transparent and painted editor masks.
+
+- Compact four-tab UI with side-by-side headshots and LoRA selectors. Identity only explicitly clears appearance overrides while preserving selected LoRAs, enables protected Qwen head-crop generation, and sets a 1.25 MP reference budget at 768 maximum side. Headshots use file-backed Gradio input; normalized CPU reference copies are capped at 1536 px each. Existing offload and bounded latent cache remain in place. The real head-crop test completed in 81 seconds; advisory selected/median likeness scores improved to 0.4804/0.4107. No peak-memory reduction benchmark or all-quantization claim is made.
+
+## September 27 boundary and removal follow-up
+
+- Identity setup retains explicit appearance-removal choices. Removal instructions remain subject to the selected edit area; head-only masks cannot remove body tattoos.
+- Protected identity edits preserve original hair by default. Explicit hairstyle/color edits retain the wider head mask. This avoids mixing regenerated upper hair with unchanged lower strands.
+- Skin-color blending samples the lower skin seam and applies a bounded color adjustment. It preserves pixels outside the edit mask; it is not a guarantee of perceptual color agreement.
+- A captured Qwen crop replay reduced the measured jaw seam difference from 10 to 6 with zero changed pixels outside the mask. This replay does not validate newly generated removal results.
+- The completed 448px Qwen quality run peaked at 6802 MiB across the whole GPU. A later 416px/6GB-profile attempt stalled near the final step and was canceled. Fast, reliable operation on a physical 6GB GPU is not yet validated.
+- Browser verification: Identity only retains Remove for forehead marks, tattoos and body piercings. The whole-image cleanup shortcut is visible immediately for the default removal settings.
+
+### Final Qwen cleanup check
+
+- Fixed the companion worker's redundant final-preview decode. Final previews now reuse the completed output. Decoding starts after the sampler returns its latents, releasing temporary sampling caches first; inference gradients remain disabled.
+- Real whole-image cleanup with the 8GB profile, 20 steps, CFG 3, BFS and character LoKr completed in 106.79 seconds. Whole-GPU peak was 8020 MiB; worker allocator peaks were 4479 MiB allocated and 4858 MiB reserved. This was a profile-limited test on a larger GPU, not testing on a physical 8GB card.
+- Visual review found no visible forehead bindi, tattoos or navel piercing on this one output. Whole-image cleanup also softened and altered some body details. Use protected editing to preserve the scene; a head-only mask cannot remove body marks. Removal is prompt-guided, not detector-verified.
+- Verification: 149 head-swap tests and 156 companion Qwen tests passed. A fresh Forge reload and browser check confirmed removal choices survive Identity only and the body-cleanup shortcut is visible. Other quantizations and a live Klein generation remain unverified.
+- After deferred decoding, a protected-head run with the 6GB profile completed in 103.19 seconds: 6016 MiB whole-GPU peak, 2308 MiB worker allocated peak, 3034 MiB worker reserved peak. Head height/width errors were 0.64%/1.03%; zero pixels changed outside the face mask or below the neck boundary. The bindi was absent. Body tattoos and navel jewelry intentionally remained outside the head mask. This is a profile-limited test on a larger GPU, not a physical 6GB-card benchmark.

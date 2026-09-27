@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-27 — Qwen head-swap repair
+
+- Preserve the trained BFS `head_swap:` trigger and target/reference order.
+- Default to protected head editing and a focused Qwen crop. Existing custom presets remain available; use **Identity only · clear style changes** to remove old hair, age, makeup and scene edits.
+- Skip the companion's global DeGrid pass during head swap; the extension's optional cleanup remains available.
+- Reject head alignment that improves one measurement while worsening width or position.
+- Qwen profiles 6/8 use smaller generation/reference crops while retaining the original output canvas. They trade speed and system RAM for lower GPU memory.
+- Character LoRA/LoKr loading is logged by filename, strength and matched-layer count. No claim is made for every adapter or quantization.
+
+
 ## 1.0 — 2026-09-25 · Universal Head Swap
 
 **One extension. Two models. Zero toggles.**
@@ -115,3 +125,9 @@ Restart Forge completely after the current batch finishes to load both updated e
 - Cleaner grouped UI, native Qwen image references/plain instructions, and verified shared-selector event binding. See VALIDATION.md for the real quality trial and remaining limits.
 
 - Reorganized controls into Setup, Appearance, Quality & mask, Speed & memory, Saved setups and Report tabs. Head-swap BFS and optional character LoRA selectors are visible in Setup. Empty Gradio mask payloads now use automatic detection; deliberately black masks still fail safely. Advanced features and argument order are preserved.
+
+- Fixed batch aborts caused by Gradio returning an untouched/cleared 800x600 black mask canvas. Blank editor masks now use detected-head protection; no detected face still fails safely, and painted masks remain honored. Added Clear mask and regression checks for opaque black, transparent and painted editor masks.
+
+- Compact four-tab UI with side-by-side headshots and LoRA selectors. Identity only explicitly clears appearance overrides while preserving selected LoRAs, enables protected Qwen head-crop generation, and sets a 1.25 MP reference budget at 768 maximum side. Headshots use file-backed Gradio input; normalized CPU reference copies are capped at 1536 px each. Existing offload and bounded latent cache remain in place. The real head-crop test completed in 81 seconds; advisory selected/median likeness scores improved to 0.4804/0.4107. No peak-memory reduction benchmark or all-quantization claim is made.
+
+- Qwen Head Swap references capped at 768 side / 1.25 MP; full-scene sampling capped at 0.75 MP. Offloaded Qwen workers return unused CUDA cache after each image. Protected head size/position correction is accepted only after face detection verifies alignment. Full-image correction remains opt-in. Peak VRAM and visual results still need live validation.

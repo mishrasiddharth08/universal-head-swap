@@ -20,6 +20,21 @@ class DummyTensor:
     def element_size(self): return 4
 
 class RuntimeTests(unittest.TestCase):
+    def test_character_trigger_comes_from_nested_metadata_and_keeps_custom_words(self):
+        metadata={'ss_tag_frequency':'{"1_subject":{"rinmjq-woman-OriginalEdition-FE-2026-QWEN21":1}}',
+                  'ss_output_name':'rinmjq-woman-OriginalEdition-FE-2026-QWEN21'}
+        self.assertEqual(runtime.character_training_trigger(metadata),
+                         'rinmjq-woman-OriginalEdition-FE-2026-QWEN21')
+        self.assertEqual(runtime.merge_character_trigger('rinmjq woman, sharp portrait',metadata),
+            'rinmjq-woman-OriginalEdition-FE-2026-QWEN21, rinmjq woman, sharp portrait')
+
+    def test_character_trigger_rejects_ambiguous_or_caption_metadata(self):
+        caption='a very long training caption, with scene and clothing details'
+        self.assertIsNone(runtime.character_training_trigger(
+            {'ss_tag_frequency':{'folder':{caption:4}}}))
+        self.assertIsNone(runtime.character_training_trigger(
+            {'ss_tag_frequency':{'folder':{'subject-a':2,'subject-b':2}}}))
+
     def fixtures(self):
         model=NS(ref_latents=['previous'],ini_latent='initial',forge_objects=NS(vae=object()))
         shared=NS(opts=NS(klein_do_reference=False),state=NS(interrupted=False,stopping_generation=False,textinfo=''))
@@ -29,7 +44,7 @@ class RuntimeTests(unittest.TestCase):
         p=NS(sd_model=model,init_images=[Image.new('RGB',(256,256))],batch_size=2,n_iter=2,scripts=None,width=512,height=512,
              init=lambda *a:None,setup_conds=lambda:None,sample=lambda:None)
         owner=NS(analyzer=NS(faces=lambda im:[],mode=None,error='detector unavailable'),last_report={})
-        cfg=core.normalize({'enable':True,'headshots':[Image.new('RGB',(256,256))]})
+        cfg=core.normalize({'enable':True,'edit_scope':'Full image edit','qwen_detail_crop':False,'headshots':[Image.new('RGB',(256,256))]})
         return model,host,p,owner,cfg
     def session(self,p,cfg,owner,host):
         with patch('khs.runtime.resolve_adapters',return_value=('bfs_head_v1_flux-klein_9b','')),patch('khs.runtime.registry',return_value={}):

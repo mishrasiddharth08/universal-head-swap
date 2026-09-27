@@ -34,23 +34,23 @@ LEGACY_KEYS = [
 NEW_KEYS = ['edit_scope','target_face','crop_padding','mask_feather','custom_mask','earrings','reference_framing',
             'reference_budget','tiny_head_boost','strict_adapter','color_match','cache_encodes','ban_jewelry',
             'removal_priority','match_sharpness','geometry_match','quality_strict','keep_original_canvas',
-            'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength','auto_model_adapter']
+            'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength','auto_model_adapter','qwen_detail_crop']
 ARG_KEYS = LEGACY_KEYS + NEW_KEYS
 APPEARANCE = ('bindi','earrings','tattoos','piercings','cross','jewelry')
 POLICIES = ['Preserve', 'Remove', 'Use prompt / preset']
 RATIO_MODES = ['Strict (match target head size exactly)', 'Strict + neck match', 'Balanced (allow tiny hair-volume change)']
 CATEGORIES = ['hairstyle','hair_color','makeup','expression','lighting','age','ethnicity','camera','earrings']
 DEFAULTS = {k:False for k in ARG_KEYS}
-DEFAULTS.update(auto_model_adapter=True,enable=False,headshots=None,lora_dropdown='Auto (match model)',lora_strength=1.0,
+DEFAULTS.update(qwen_detail_crop=True,auto_model_adapter=True,enable=False,headshots=None,lora_dropdown='Auto (match model)',lora_strength=1.0,
     char_lora_name='None (skip)',char_lora_strength=0.7,char_lora_trigger='',expression_strength=1.0,
     neg_preset_dropdown='None',neg_prompt_enable=False,neg_prompt_text='',resolution_dropdown='1024',auto_prompt=True,
     prevent_extra_head=True,hdr_gain=0.25,dof_blur=0.0,grain_amount=0.0,sharpness=0,latent_sharpness=0,
     latent_kernel_size='3x3',pick_mode='Best match (smart, no rotation)',manual_slot='Auto (no override)',
     auto_pick_best=True,rotate_top_only=True,auto_adapt=True,ratio_lock=True,ratio_mode=RATIO_MODES[1],
     dominant_pos=True,blend_slider=50,blend_order='Extension instruction first',blend_lora_boost=False,
-    ban_channel='Positive + Negative (uses at least CFG 1.1)',edit_scope='Full image edit',target_face=1,crop_padding=0.55,
+    ban_channel='Positive + Negative (uses at least CFG 1.1)',edit_scope='Protected head edit',target_face=1,crop_padding=0.55,
     mask_feather=0.08,custom_mask=None,reference_framing='Head crop (recommended)',reference_budget=2.5,
-    tiny_head_boost=False,strict_adapter=True,color_match=0.0,cache_encodes=True,removal_priority=True,
+    tiny_head_boost=False,strict_adapter=True,color_match=0.35,cache_encodes=True,removal_priority=True,
     match_sharpness=True,geometry_match=True,quality_strict=False,keep_original_canvas=True,
     identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5)
 DEFAULTS.update({k:[] for k in CATEGORIES})
@@ -61,6 +61,17 @@ DEPRECATED = {'block_tattoos','block_crosses','block_sindoor_bindi','block_pierc
               'neg_cfg_boost','force_klein','dominant_pos'}
 SAVE_KEYS = [k for k in ARG_KEYS if k not in EXCLUDE_SAVE | DEPRECATED]
 _PRESET_LOCK = threading.RLock()
+
+def identity_setup():
+    """Explicit UI recipe: keep identity and scene; leave selected LoRAs intact."""
+    values={k:[] for k in CATEGORIES}
+    values.update({'rand_'+k:False for k in CATEGORIES if 'rand_'+k in DEFAULTS})
+    values.update(edit_scope='Protected head edit',custom_mask=None,
+                  neg_preset_dropdown='None',neg_prompt_text='',neg_prompt_enable=False,hdr_enable=False,
+                  grain_amount=0.0,dof_blur=0.0,sharpness=0,moire_enabled=False,
+                  auto_prompt=True,blend_slider=50,color_match=0.35,
+                  auto_pick_best=True,rotate_top_only=True,manual_slot='Auto',qwen_detail_crop=True,resolution_dropdown='768',reference_budget=1.25)
+    return values
 
 def normalize(values=None):
     cfg = dict(DEFAULTS)
@@ -332,7 +343,7 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
         if appearances['earrings']!='Remove': notes.append('Earrings removal is also required by Remove jewelry / piercings.')
         appearances['earrings']='Remove'
     if cfg['edit_scope']=='Protected head edit' and any(appearances[k]=='Remove' for k in ('tattoos','piercings','jewelry')):
-        notes.append('Protected head edit only cleans inside the head mask. Use Full image edit for tattoos, piercings or jewelry elsewhere on the body.')
+        notes.append('Protected head edit only cleans inside the head mask. Open Edit mask and paint body tattoos, piercings or jewelry white, or select Whole image.')
     extras=[]
     for cat,phrase in resolved.items():
         conflict=[k for k in APPEARANCE if appearances[k]=='Remove' and affirmative_mention(phrase,k)]
@@ -346,7 +357,7 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
         clauses.append('head_swap: use Picture 1 as the target body and scene; replace its head with the facial identity, eye color and nose structure of Picture 2; preserve the pose, expression, outfit, lighting and background of Picture 1')
         if target_location:
             clauses.append(f'apply the identity change only to the head centered {target_location[0]:.0%} from the left and {target_location[1]:.0%} from the top of Picture 1; preserve all other people')
-        if not any('hairstyle' in v or 'hair' in v for v in extras): clauses.append('use the head and hair of Picture 2')
+        if not any('hairstyle' in v or 'hair' in v for v in extras): clauses.append('preserve the hairstyle, hair length, hairline and outer hair silhouette of Picture 1; use Picture 2 for facial identity only')
     if cfg['ratio_lock']:
         clauses.append('keep the original head scale relative to the shoulders and body of Picture 1')
         if 'neck' in cfg['ratio_mode'].lower(): clauses.append('match the original neck thickness and shoulder junction')
@@ -388,7 +399,7 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
     if count and count>512: notes.append(f'{count} Qwen3 tokens; all user text retained. Long prompts cost more memory.')
     return Plan(positive.strip(),negative,guidance,int(seed),round(strength,2),resolved,appearances,notes,count)
 
-def rgb_image(value):
+def rgb_image(value,max_side=None):
     if isinstance(value,(tuple,list)): value=value[0] if value else None
     if isinstance(value,dict):
         value=next((value.get(k) for k in ('composite','image','background','name','path') if value.get(k) is not None),None)
@@ -396,16 +407,18 @@ def rgb_image(value):
     if isinstance(value,str):
         if value.startswith('data:image/'):
             import base64,io
-            with Image.open(io.BytesIO(base64.b64decode(value.split(',',1)[1]))) as im: return rgb_image(im)
-        with Image.open(value) as im: return rgb_image(im)
+            with Image.open(io.BytesIO(base64.b64decode(value.split(',',1)[1]))) as im: return rgb_image(im,max_side=max_side)
+        with Image.open(value) as im: return rgb_image(im,max_side=max_side)
     if isinstance(value,np.ndarray): value=Image.fromarray(value)
     if not isinstance(value,Image.Image): raise ValueError('Upload a valid image.')
     im=ImageOps.exif_transpose(value)
+    if max_side and max(im.size)>max_side:
+        im.thumbnail((max_side,max_side),Image.Resampling.LANCZOS)
     if im.mode in ('RGBA','LA') or 'transparency' in im.info:
         rgba=im.convert('RGBA'); bg=Image.new('RGBA',im.size,'white'); bg.alpha_composite(rgba); return bg.convert('RGB')
     return im.convert('RGB').copy()
 
-def gallery_images(items,limit=20):
+def gallery_images(items,limit=20,max_side=1536):
     refs=[]; labels=[]
     if len(items or [])>limit: raise ValueError(f'Upload at most {limit} reference headshots; remove the extra uploads.')
     for i,item in enumerate((items or [])[:limit]):
@@ -413,7 +426,7 @@ def gallery_images(items,limit=20):
         source=item[0] if isinstance(item,(tuple,list)) else item
         if isinstance(source,dict): label=label or source.get('orig_name') or source.get('name') or ''
         elif isinstance(source,str): label=label or Path(source).name
-        try: refs.append(rgb_image(source)); labels.append(str(label or f'Slot {i+1}'))
+        try: refs.append(rgb_image(source,max_side=max_side)); labels.append(str(label or f'Slot {i+1}'))
         except Exception as e: raise ValueError(f'Reference slot {i+1}: {e}') from e
     if not refs: raise ValueError('Upload at least one reference headshot.')
     return refs,labels
@@ -516,13 +529,17 @@ def geometry_report(target_pose,generated_pose):
     height_change=(gy1-gy0)/(ty1-ty0)-1
     width_change=(gx1-gx0)/(tx1-tx0)-1
     height_error=abs((gy1-gy0)/(ty1-ty0)-1)
+    width_error=abs((gx1-gx0)/(tx1-tx0)-1)
     center_error=math.hypot((gx0+gx1-tx0-tx1)/2,(gy0+gy1-ty0-ty1)/2)
+    chin_error=math.hypot((gx0+gx1-tx0-tx1)/2,gy1-ty1)
     return {'head_height_error_percent':round(height_error*100,2),'head_center_error_px':round(center_error,2),
+            'head_width_error_percent':round(width_error*100,2),'chin_error_px':round(chin_error,2),
             'head_height_change_percent':round(height_change*100,2),
             'head_width_change_percent':round(width_change*100,2),
             'head_area_change_percent':round(((1+height_change)*(1+width_change)-1)*100,2),
-            'geometry_target_met':bool(height_error<=0.08 and center_error<=max(3,(ty1-ty0)*0.08)),
-            'note':'Measured face height and center; excludes hair volume and shoulder/neck anatomy.'}
+            'geometry_target_met':bool(height_error<=0.08 and width_error<=0.10
+                and center_error<=max(3,(ty1-ty0)*0.10) and chin_error<=max(3,(ty1-ty0)*0.08)),
+            'note':'Measured face width, height, center and source-anchored chin; excludes hair volume.'}
 
 def memory_limits(total_bytes,free_bytes,requested=1024,megapixels=2.5):
     gib=1024**3; total=total_bytes/gib; free=free_bytes/gib
@@ -550,10 +567,22 @@ class EditRegion:
     mask: Image.Image
     crop: Image.Image
 
-def build_region(original,pose,padding=0.55,feather=0.08,mask=None):
-    # Gradio returns an empty editor payload even when no mask was supplied.
+def build_region(original,pose,padding=0.55,feather=0.08,mask=None,preserve_hair=False):
+    # A cleared Gradio editor can return either None or a black default canvas.
+    # Both mean no custom edit area; retain detected-head protection.
     if isinstance(mask,dict):
         mask=mask.get('composite') if mask.get('composite') is not None else mask.get('background')
+        if mask is not None:
+            if not isinstance(mask,Image.Image): mask=rgb_image(mask)
+            if mask.mode in ('RGBA','LA') or 'transparency' in mask.info:
+                rgba=mask.convert('RGBA')
+                visible=Image.new('RGB',rgba.size,'black')
+                visible.paste(rgba,mask=rgba.getchannel('A'))
+                mask=visible
+            mask=ImageOps.exif_transpose(mask).convert('L')
+            if mask.getbbox() is None:
+                print('[UniversalHeadSwap] Blank mask editor: using automatic head detection.')
+                mask=None
     if mask is not None:
         if not isinstance(mask,Image.Image): mask=rgb_image(mask)
         mask=ImageOps.exif_transpose(mask).convert('L')
@@ -567,12 +596,26 @@ def build_region(original,pose,padding=0.55,feather=0.08,mask=None):
     else:
         if not pose: raise ValueError('Protected head edit needs a detected target face or a custom white-on-black mask.')
         x0,y0,x1,y1=pose['box']; hh=y1-y0; hw=x1-x0
-        # Include hair above the face, ears, and a short neck transition.
-        x0-=hw*0.40; x1+=hw*0.40; y0-=hh*0.65; y1+=hh*0.40
+        # Preserve source hair with a face-contour mask. Explicit hair
+        # replacement retains the wider head-and-hair ellipse.
+        jaw_start=y1-hh*0.02; jaw_end=y1+hh*0.12
+        if preserve_hair:
+            x0-=hw*0.08; x1+=hw*0.08; y0-=hh*0.10
+        else:
+            x0-=hw*0.40; x1+=hw*0.40; y0-=hh*0.65
         mask=Image.new('L',original.size,0)
-        ImageDraw.Draw(mask).ellipse((x0,y0,x1,y1),fill=255)
+        ImageDraw.Draw(mask).ellipse((x0,y0,x1,jaw_end),fill=255)
     radius=max(0,round(min(hw,hh)*feather))
     if radius: mask=mask.filter(ImageFilter.GaussianBlur(radius))
+    if pose is not None and 'jaw_start' in locals():
+        # Clamp post-blur spill below the jaw while retaining a smooth blend.
+        arr=np.asarray(mask,dtype=np.float32).copy()
+        top=max(0,min(arr.shape[0],int(round(jaw_start))))
+        bottom=max(top+1,min(arr.shape[0],int(round(jaw_end))))
+        fade=np.linspace(1.0,0.0,bottom-top,endpoint=True,dtype=np.float32)
+        arr[top:bottom]*=fade[:,None]
+        arr[bottom:]=0
+        mask=Image.fromarray(np.clip(arr,0,255).astype(np.uint8),'L')
     extent=mask.getbbox()
     if extent is None: raise ValueError('The edit region is empty.')
     x0,y0,x1,y1=extent; margin=max(hw,hh)*padding
@@ -584,10 +627,33 @@ def composite_region(generated,region,color_match=0):
     if color_match>0:
         base=np.asarray(region.original.crop(region.box),dtype=np.float32); arr=np.asarray(patch,dtype=np.float32)
         alpha=np.asarray(region.mask.crop(region.box),dtype=np.float32)/255
-        ring=(alpha>0.05)&(alpha<0.8)
-        if ring.sum()>20:
-            shift=np.clip(base[ring].mean(0)-arr[ring].mean(0),-24,24)*color_match
-            patch=Image.fromarray(np.clip(arr+shift,0,255).astype(np.uint8))
+        def ycbcr(rgb):
+            r,g,b=rgb[...,0],rgb[...,1],rgb[...,2]
+            return np.stack((.299*r+.587*g+.114*b,
+                128-.168736*r-.331264*g+.5*b,
+                128+.5*r-.418688*g-.081312*b),axis=-1)
+        source=ycbcr(base); changed=ycbcr(arr)
+        def skin(value):
+            return ((value[...,0]>45)&(value[...,1]>70)&(value[...,1]<140)
+                    &(value[...,2]>120)&(value[...,2]<190))
+        ys,xs=np.where(alpha>0.05)
+        if len(xs):
+            left,right,top,bottom=xs.min(),xs.max()+1,ys.min(),ys.max()+1
+            yy,xx=np.ogrid[:alpha.shape[0],:alpha.shape[1]]
+            height=bottom-top
+            central=(xx>=left+.20*(right-left))&(xx<right-.20*(right-left))
+            jaw=central&(yy>=top+.58*height)&(yy<top+.82*height)&(alpha>0.65)&skin(changed)
+            neck=central&(yy>=bottom)&(yy<min(alpha.shape[0],bottom+.18*height))&(alpha<0.05)&skin(source)
+            if jaw.sum()>20 and neck.sum()>20:
+                delta=np.median(source[neck],axis=0)-np.median(changed[jaw],axis=0)
+                delta=np.clip(delta,(-16,-10,-10),(16,10,10))*float(color_match)
+                selected=skin(changed)&(alpha>0.05)
+                weight=alpha[...,None]
+                changed[selected]+=delta*weight[selected]
+                y,cb,cr=changed[...,0],changed[...,1]-128,changed[...,2]-128
+                corrected=np.stack((y+1.402*cr,y-.344136*cb-.714136*cr,y+1.772*cb),axis=-1)
+                pixels=arr.copy(); pixels[selected]=corrected[selected]
+                patch=Image.fromarray(np.clip(pixels,0,255).astype(np.uint8))
     layer=region.original.copy(); layer.paste(patch,(x0,y0))
     return Image.composite(layer,region.original,region.mask)
 
@@ -599,6 +665,30 @@ def scale_pose(pose,from_size,to_size,offset=(0,0)):
     result['head_w']=(x1-x0)*sx; result['head_h']=(y1-y0)*sy
     result['head_px']=max(result['head_w'],result['head_h']); result['head_ratio']=result['head_h']/to_size[1]
     return result
+
+def align_protected_head(image,baseline,target_pose,generated_pose):
+    """Align a generated crop; callers composite only the original protected mask."""
+    tx0,ty0,tx1,ty1=target_pose['box']; gx0,gy0,gx1,gy1=generated_pose['box']
+    tw,th=tx1-tx0,ty1-ty0; gw,gh=gx1-gx0,gy1-gy0
+    if min(tw,th,gw,gh)<8: raise ValueError('Face too small for reliable alignment.')
+    height_scale=th/gh; width_scale=tw/gw
+    # One isotropic transform preserves identity. Balance width and height,
+    # while limiting height deviation to 10%, then pin the chin to the source.
+    scale=math.sqrt(height_scale*width_scale)
+    scale=max(height_scale*0.90,min(height_scale*1.10,scale))
+    tx,ty=(tx0+tx1)/2,ty1; gx,gy=(gx0+gx1)/2,gy1
+    if not 0.5<=scale<=1.5 or math.hypot(tx-gx,ty-gy)>th*0.5:
+        raise ValueError('Generated head differs too much for safe alignment; choose another reference.')
+    dx,dy=tx-scale*gx,ty-scale*gy
+    affine=(1/scale,0,-dx/scale,0,1/scale,-dy/scale)
+    moved=image.transform(image.size,Image.Transform.AFFINE,affine,resample=Image.Resampling.BICUBIC)
+    valid=Image.new('L',image.size,255).transform(image.size,Image.Transform.AFFINE,affine,resample=Image.Resampling.NEAREST)
+    box=(max(0,int(tx0)),max(0,int(ty0)),min(image.width,int(tx1)),min(image.height,int(ty1)))
+    if not all(box[i+2]>box[i] for i in range(2)) or valid.crop(box).getextrema()[0]<255:
+        raise ValueError('Aligned face would fall outside the generated crop.')
+    return Image.composite(moved,baseline,valid),{'scale_factor':round(scale,4),
+        'height_scale':round(height_scale,4),'width_scale':round(width_scale,4),
+        'translation_px':[round(dx,2),round(dy,2)],'anchor':'source chin','mode':'protected crop alignment'}
 
 def correct_head_scale(image,target_pose,generated_pose):
     """Correct measured face height/center isotropically, feathering the head region."""
@@ -663,3 +753,18 @@ class BoundedCache:
         while self.items and self.bytes+size>self.max_bytes: self.bytes-=self.items.popitem(last=False)[1][1]
         self.items[key]=(value,size); self.bytes+=size
     def clear(self): self.items.clear(); self.bytes=0
+
+
+def alignment_improves(before,after,height):
+    """Accept balanced width/height/chin correction within hard geometry limits."""
+    height=max(8,height)
+    width=lambda value:value.get('head_width_error_percent',abs(value.get('head_width_change_percent',0)))
+    chin=lambda value:value.get('chin_error_px',value.get('head_center_error_px',0))
+    cost=lambda value:(value['head_height_error_percent']+width(value)
+        +60*value['head_center_error_px']/height+80*chin(value)/height)
+    return (cost(after)<=cost(before)+1
+            and after['head_height_error_percent']<=8
+            and width(after)<=10
+            and chin(after)<=max(3,height*0.08)
+            and after['head_center_error_px']<=max(3,height*0.10)
+            and after['head_center_error_px']<=before['head_center_error_px']+2)

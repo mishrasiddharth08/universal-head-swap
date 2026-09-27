@@ -153,6 +153,98 @@ class GeometryTests(unittest.TestCase):
         original=np.asarray(self.im); actual=np.asarray(result); outside=np.asarray(region.mask)==0
         self.assertTrue(outside.any()); np.testing.assert_array_equal(original[outside],actual[outside])
         self.assertEqual(result.size,self.im.size)
+    def test_skin_only_boundary_match_reduces_jaw_neck_color_seam(self):
+        original=Image.new('RGB',(100,100),(220,180,160))
+        mask=Image.new('L',(100,100),0)
+        ImageDraw.Draw(mask).ellipse((15,5,85,85),fill=255)
+        mask=mask.filter(ImageFilter.GaussianBlur(8))
+        region=core.EditRegion(original,(0,0,100,100),mask,original)
+        generated=Image.new('RGB',(100,100),(240,140,100))
+        ImageDraw.Draw(generated).rectangle((35,10,65,25),fill=(12,12,12))
+        before=np.abs(np.asarray(generated,dtype=float)[60,50]-np.asarray(original,dtype=float)[60,50]).sum()
+        result=core.composite_region(generated,region,.35)
+        uncorrected=core.composite_region(generated,region,0)
+        after=np.abs(np.asarray(result,dtype=float)[60,50]-np.asarray(original,dtype=float)[60,50]).sum()
+        self.assertLess(after,before)
+        self.assertEqual(result.getpixel((50,15)),uncorrected.getpixel((50,15)))
+        self.assertEqual(result.getpixel((0,0)),original.getpixel((0,0)))
+    def test_automatic_mask_preserves_original_neck_and_shoulders(self):
+        region=core.build_region(self.im,self.pose,0.3,0.08)
+        generated=Image.new('RGB',region.crop.size,'green')
+        result=core.composite_region(generated,region)
+        x0,y0,x1,y1=self.pose['box'];hh=y1-y0
+        neck_y=min(self.im.height-1,int(round(y1+hh*0.14)))
+        original=np.asarray(self.im);actual=np.asarray(result)
+        np.testing.assert_array_equal(actual[neck_y:],original[neck_y:])
+        self.assertEqual(region.mask.getpixel(((x0+x1)//2,neck_y)),0)
+
+    def test_face_contour_mode_preserves_side_hair_and_neck(self):
+        broad=core.build_region(self.im,self.pose,0.3,0.08)
+        contour=core.build_region(self.im,self.pose,0.3,0.08,preserve_hair=True)
+        x0,y0,x1,y1=self.pose['box']; hw=x1-x0; hh=y1-y0
+        side=(round(x0-hw*.24),round(y0+hh*.45))
+        self.assertGreater(broad.mask.getpixel(side),0)
+        self.assertLessEqual(contour.mask.getpixel(side),8)
+        self.assertGreater(contour.mask.getpixel(((x0+x1)//2,(y0+y1)//2)),240)
+        neck_y=min(self.im.height-1,round(y1+hh*.14))
+        self.assertEqual(contour.mask.getpixel(((x0+x1)//2,neck_y)),0)
+
+    def test_custom_mask_can_still_edit_neck_when_requested(self):
+        mask=Image.new('L',self.im.size,0)
+        x0,y0,x1,y1=self.pose['box'];hh=y1-y0
+        neck_y=min(self.im.height-2,int(round(y1+hh*0.2)))
+        ImageDraw.Draw(mask).rectangle((x0,neck_y,x1,neck_y+1),fill=255)
+        region=core.build_region(self.im,self.pose,0,0,mask)
+        self.assertEqual(region.mask.getpixel(((x0+x1)//2,neck_y)),255)
+
+    def test_identity_recipe_preserves_user_inputs_and_resets_styles(self):
+        recipe=core.identity_setup()
+        self.assertTrue(set(recipe).issubset(core.ARG_KEYS))
+        for key in ('headshots','lora_dropdown','char_lora_name','char_lora_trigger'):
+            self.assertNotIn(key,recipe)
+        self.assertEqual(recipe['edit_scope'],'Protected head edit')
+        self.assertTrue(recipe['qwen_detail_crop'])
+        self.assertTrue(all(recipe[key]==[] for key in core.CATEGORIES))
+
+    def test_reference_pool_has_bounded_resolution(self):
+        source=Image.new('RGB',(3000,2000),'blue')
+        refs,labels=core.gallery_images([source],max_side=1536)
+        self.assertLessEqual(max(refs[0].size),1536)
+        self.assertEqual(source.size,(3000,2000))
+
+    def test_protected_alignment_corrects_oversized_head(self):
+        from PIL import ImageDraw
+        baseline=Image.new('RGB',(200,200),'blue')
+        generated=Image.new('RGB',(200,200),'green')
+        ImageDraw.Draw(generated).rectangle((55,40,145,160),fill='red')
+        target={'box':(70,60,130,140)}
+        source={'box':(55,40,145,160)}
+        corrected,report=core.align_protected_head(generated,baseline,target,source)
+        self.assertAlmostEqual(report['scale_factor'],2/3,places=3)
+        self.assertEqual(corrected.getpixel((100,100)),(255,0,0))
+        self.assertEqual(corrected.getpixel((0,0)),(0,0,255))
+        with self.assertRaises(ValueError):
+            core.align_protected_head(generated,baseline,target,{'box':(0,0,199,199)})
+
+    def test_blank_editor_canvas_uses_detected_head(self):
+        expected=core.build_region(self.im,self.pose)
+        for canvas in (Image.new('RGB',(800,600),'black'),Image.new('RGBA',(800,600),(255,255,255,0))):
+            with self.subTest(mode=canvas.mode):
+                payload={'background':canvas,'composite':canvas,'layers':[]}
+                actual=core.build_region(self.im,self.pose,mask=payload)
+                self.assertEqual(actual.box,expected.box)
+                self.assertEqual(actual.mask.tobytes(),expected.mask.tobytes())
+                with self.assertRaisesRegex(ValueError,'detected target face'):
+                    core.build_region(self.im,None,mask=payload)
+
+    def test_painted_editor_mask_keeps_custom_area(self):
+        canvas=Image.new('L',self.im.size,0)
+        canvas.paste(255,(20,30,80,100))
+        expected=core.build_region(self.im,None,mask=canvas)
+        actual=core.build_region(self.im,None,mask={'background':None,'composite':canvas,'layers':[]})
+        self.assertEqual(actual.box,expected.box)
+        self.assertEqual(actual.mask.tobytes(),expected.mask.tobytes())
+
     def test_custom_empty_mask_refused_and_wrong_size_mask_resized(self):
         with self.assertRaises(ValueError): core.build_region(self.im,self.pose,mask=Image.new('L',self.im.size))
         region=core.build_region(self.im,self.pose,mask=Image.new('L',(4,4),'white'))
@@ -177,6 +269,17 @@ class GeometryTests(unittest.TestCase):
         other=dict(self.pose,box=(180,100,420,650))
         report=core.geometry_report(self.pose,other)
         self.assertAlmostEqual(report['head_height_error_percent'],10)
+        self.assertFalse(report['geometry_target_met'])
+
+    def test_geometry_gate_rejects_wide_face_and_chin_drift(self):
+        target=dict(self.pose,box=(160,100,400,600))
+        wide=dict(self.pose,box=(145,100,415,600))
+        report=core.geometry_report(target,wide)
+        self.assertGreater(report['head_width_error_percent'],10)
+        self.assertFalse(report['geometry_target_met'])
+        low=dict(self.pose,box=(160,145,400,645))
+        report=core.geometry_report(target,low)
+        self.assertGreater(report['chin_error_px'],10)
         self.assertFalse(report['geometry_target_met'])
     def test_geometry_rejects_extreme_scale(self):
         other=dict(self.pose,box=(180,100,200,140))

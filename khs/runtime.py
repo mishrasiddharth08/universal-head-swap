@@ -4,6 +4,7 @@ from functools import wraps
 import json
 import copy
 import math
+import re
 import time
 
 import numpy as np
@@ -70,6 +71,45 @@ def registry():
     if not networks.available_networks: networks.list_available_networks()
     return networks.available_networks
 
+def character_training_trigger(metadata):
+    """Return a confident trigger from adapter metadata, never its filename."""
+    metadata=metadata if isinstance(metadata,dict) else {}
+    def decoded(value):
+        if isinstance(value,str):
+            try: return json.loads(value)
+            except (TypeError,ValueError,json.JSONDecodeError): return value
+        return value
+    for key in ('trigger_words','ss_trigger_words','activation_text'):
+        value=decoded(metadata.get(key))
+        if isinstance(value,str) and value.strip(): return value.strip()
+        if isinstance(value,(list,tuple)):
+            values=[str(x).strip() for x in value if str(x).strip()]
+            if len(values)==1: return values[0]
+    frequency=decoded(metadata.get('ss_tag_frequency',metadata.get('tag_frequency')))
+    found={}
+    def visit(value):
+        value=decoded(value)
+        if not isinstance(value,dict): return
+        for label,count in value.items():
+            count=decoded(count)
+            if isinstance(count,dict): visit(count); continue
+            if not isinstance(count,(int,float)) or count<=0: continue
+            label=str(label).strip()
+            # Tag-frequency may contain captions. Only short activation tokens
+            # are safe to inject automatically.
+            if label and len(label)<=128 and len(label.split())<=8 and not re.search(r'[,;\n\r]',label):
+                found[label.casefold()]=(label,float(count))
+    visit(frequency)
+    if len(found)==1: return next(iter(found.values()))[0]
+    output=str(metadata.get('ss_output_name','')).strip().casefold()
+    return found.get(output,(None,0))[0]
+
+def merge_character_trigger(custom,metadata):
+    trained=character_training_trigger(metadata)
+    custom=str(custom or '').strip()
+    if not trained or trained.casefold() in custom.casefold(): return custom
+    return ', '.join(x for x in (trained,custom) if x)
+
 def resolve_adapters(cfg,model,family='klein'):
     entries=registry(); size=model_size(model) if family=='klein' else None
     wanted=cfg['lora_dropdown']
@@ -127,6 +167,7 @@ class ScriptGuard:
 
 class Session:
     def __init__(self,p,cfg,owner,host,model=None):
+        cfg=dict(cfg)
         self.p=p; self.cfg=cfg; self.owner=owner; self.host=host; self.model=p.sd_model if model is None else model
         self.family,self.family_size=model_family(self.model,host)
         if self.family is None:
@@ -140,6 +181,9 @@ class Session:
         self.original=core.rgb_image(p.init_images[0]); self.refs,self.labels=core.gallery_images(cfg['headshots'])
         self.fs,self.char=resolve_adapters(cfg,self.model,self.family)
         entries=registry(); self.owned_aliases=[getattr(entries[n],'alias','') for n in (self.fs,self.char) if n in entries]
+        char_entry=entries.get(self.char)
+        char_metadata=getattr(char_entry,'metadata',{}) if char_entry is not None else {}
+        cfg['char_lora_trigger']=merge_character_trigger(cfg.get('char_lora_trigger'),char_metadata)
         self.key,self.edit_value=option_key(host.shared.opts,self.family)
         self.old_option=getattr(host.shared.opts,self.key) if self.key is not None else None
         self.old_refs=list(self.model.ref_latents); self.old_ini=self.model.ini_latent
@@ -186,7 +230,8 @@ class Session:
         if cfg['edit_scope']=='Protected head edit':
             if cfg['no_ref_diag']: raise ValueError('Protected head edit cannot be combined with no-reference diagnostics.')
             if getattr(p,'image_mask',None) is not None: raise ValueError('Use the plain img2img tab with Protected head edit; upload an optional mask inside the extension.')
-            self.region=core.build_region(self.original,self.target_pose,cfg['crop_padding'],cfg['mask_feather'],cfg['custom_mask'])
+            preserve_hair=not any(cfg.get(k) for k in ('hairstyle','hair_color','rand_hairstyle','rand_hair_color'))
+            self.region=core.build_region(self.original,self.target_pose,cfg['crop_padding'],cfg['mask_feather'],cfg['custom_mask'],preserve_hair=preserve_hair)
             self.target=self.region.crop
             side=self.requested_side(); w,hh=self.target.size
             scale=side/max(w,hh); w=max(64,round(w*scale/64)*64); hh=max(64,round(hh*scale/64)*64)
@@ -407,17 +452,17 @@ class Session:
             else:
                 if cfg['geometry_match']:
                     quality['geometry_before']=core.geometry_report(target_pose,generated_pose)
-                if cfg['geometry_match'] and cfg.get('geometry_correct',False):
+                if cfg['geometry_match'] and (self.region or cfg.get('geometry_correct',False)):
                     try:
-                        corrected,correction=core.correct_head_scale(image,target_pose,generated_pose)
+                        if self.region:
+                            corrected,correction=core.align_protected_head(image,baseline,target_pose,generated_pose)
+                        else:
+                            corrected,correction=core.correct_head_scale(image,target_pose,generated_pose)
                         verified=core.nearest_face(self.owner.analyzer.faces(corrected),target_pose,corrected.size)
                         if verified is None: raise ValueError('Face detection failed after head correction; kept the uncorrected image.')
                         measured=core.geometry_report(target_pose,verified)
                         before=quality['geometry_before']
-                        height=max(8,target_pose['head_h'])
-                        before_cost=before['head_height_error_percent']+100*before['head_center_error_px']/height
-                        after_cost=measured['head_height_error_percent']+100*measured['head_center_error_px']/height
-                        if after_cost>before_cost+1:
+                        if not core.alignment_improves(before,measured,target_pose['head_h']):
                             raise ValueError('Head correction did not improve measured scale; kept the uncorrected image.')
                         image=corrected; generated_pose=verified; quality['correction']=correction
                     except ValueError as e: quality['geometry_warning']=str(e)
@@ -458,7 +503,7 @@ class Session:
         acceptable=(not cfg['geometry_match'] or quality.get('geometry_final',{}).get('geometry_target_met',False)) and (
                     not cfg['match_sharpness'] or quality.get('detail_final',{}).get('detail_target_met',False))
         quality['quality_gate_passed']=bool(acceptable)
-        quality['pixel_head_resizing_enabled']=bool(cfg.get('geometry_correct',False))
+        quality['pixel_head_resizing_enabled']=bool(cfg['geometry_match'] and (self.region or cfg.get('geometry_correct',False)))
         quality['removal_verification']='Prompt-guided only; no tattoo/piercing detector. Inspect all visible skin at 100%.'
         self.quality_history.append(quality)
         self.owner.last_report['quality']=quality

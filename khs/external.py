@@ -5,13 +5,33 @@ import json
 
 from . import core, runtime
 
+BFS_QWEN21_TRIGGER = (
+    'head_swap: start <image1> as base image, keeping its lighting, environment, background. '
+    'remove head from <image1> completely replace it head from <image2>, strictly preserving '
+    'hair, eye color, nose structure from <image2>. copy direction of eye, head rotation, '
+    'micro expressions from <image1>, high quality, sharp details, 4k. '
+    '<image2> supplies facial identity only; preserve hairstyle, hair length, hairline and '
+    'outer hair silhouette from <image1> unless an explicit hairstyle instruction follows.'
+)
+
 
 class ExternalSession(runtime.Session):
+    def requested_side(self):
+        # Bound reference encodes and head-crop sampling independently of stale UI values.
+        gb=float(getattr(self,'memory_profile',{}).get('vram_gb',99))
+        cap=416 if gb<=6 else 640 if gb<=8 else 768
+        return min(cap,super().requested_side())
+
     def enter(self):
         full_size=(max(64,round(self.p.width/64)*64),max(64,round(self.p.height/64)*64))
+        # Limit full-scene sampling too; keep original dimensions for compositing.
+        import math
+        scale=min(1.0,math.sqrt(786432/(full_size[0]*full_size[1])))
+        full_size=tuple(max(64,int(v*scale)//64*64) for v in full_size)
+        self.set_p('width',full_size[0]); self.set_p('height',full_size[1])
         super().enter()
         self.external_canvas_size=None
-        if self.region:
+        if self.region and not self.cfg.get('qwen_detail_crop',False):
             # Qwen's character LoRAs can reframe tight head crops as portraits.
             # Condition on the full scene, then composite only the protected area.
             self.external_canvas_size=full_size
@@ -43,14 +63,16 @@ class ExternalSession(runtime.Session):
         # The older native Qwen engine's zero-based remapping does not apply.
         plan.positive=plan.positive.replace('Picture 1','<image1>').replace('Picture 2','<image2>')
         plan.negative=plan.negative.replace('Picture 1','<image1>').replace('Picture 2','<image2>')
-        plan.positive=plan.positive.replace('head_swap: use <image1> as the target body and scene; replace its head with the facial identity, eye color and nose structure of <image2>', 'Swap the head of the person in <image1> with the head of the person in <image2>')
+        plan.positive=plan.positive.replace(
+            'head_swap: use <image1> as the target body and scene; replace its head with the facial identity, eye color and nose structure of <image2>',
+            BFS_QWEN21_TRIGGER)
         self.plans.append(plan)
         slot, reason = core.select_reference(self.scored, cfg, index, len(self.refs))
         self.selected_ref = slot
         reference = core.prepare_reference(self.refs[slot], self.poses[slot],
                                            self.target_pose, cfg['reference_framing'])
         _, total, free = runtime.device_policy(self.host)
-        side, budget = core.memory_limits(total, free, self.requested_side(), cfg['reference_budget'])
+        side, budget = core.memory_limits(total, free, self.requested_side(), min(1.25,cfg['reference_budget']))
         pair = core.prepare_pair(self.target, reference, side, budget)
         if cfg['no_ref_diag']:
             pair = []
@@ -60,6 +82,7 @@ class ExternalSession(runtime.Session):
             'selected_slot': slot + 1, 'reference_count': len(self.refs), 'reason': reason,
             'plan': plan.report(), 'analysis': self.analysis,
             'encoded_sizes': [im.size for im in pair],
+            'memory_limits': {'reference_side':side,'reference_megapixels':budget,'sampling_size':[self.p.width,self.p.height]},
         }
         if cfg['latent_sharpness']:
             self.owner.last_report['latent_sharpness'] = 'Klein-only; Qwen receives pixel references.'
