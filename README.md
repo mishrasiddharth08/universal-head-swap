@@ -63,7 +63,7 @@ A Klein BFS LoRA is **not** interchangeable with Qwen — the extension enforces
 
 Everything lives inside Forge's normal img2img view. The extension adds a single collapsed **Universal Head Swap** accordion:
 
-![Universal Head Swap panel layout](docs/img/ui-panel.svg)
+![Four-tab Universal Head Swap guide — updated September 28, 2026](docs/img/ui-panel.svg)
 
 Inside the panel:
 
