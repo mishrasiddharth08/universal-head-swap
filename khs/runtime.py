@@ -300,9 +300,24 @@ class Session:
             # Honor both Forge's chosen generation size and available memory.
             side=min(side,max(256,int(max(self.p.width,self.p.height))))
             _,total,free=device_policy(self.host)
-            return core.memory_limits(total,free,side,self.cfg['reference_budget'])[0]
+            return self.head_ratio_side(core.memory_limits(total,free,side,self.cfg['reference_budget'])[0])
         if self.cfg['auto_adapt'] and self.target_pose and self.target_pose['head_px']<220: side=max(side,1280)
-        return min(2048,max(256,side))
+        return self.head_ratio_side(min(2048,max(256,side)))
+    def head_ratio_side(self,side):
+        """Keep the body-to-head ratio per image: scale the crop so the head lands
+        in a consistent pixel band on the generation canvas, never exceeding the
+        user's resolution budget. Uniform scaling preserves proportions; this only
+        prevents tiny heads from being sampled at a scale too small for identity."""
+        pose=self.target_pose
+        if not pose or not self.target: return side
+        w,hh=self.target.size
+        if not w or not hh: return side
+        head=max(pose.get('head_w',0)/w,pose.get('head_h',0)/hh)
+        if head<=0: return side
+        # Aim for a 360–640 px head on the canvas; respect the resolution cap.
+        target=max(360,min(640,side*0.6))
+        needed=int(target/head)
+        return max(side,min(2048,round(needed/64)*64)) if needed>side else side
     def fail(self,e):
         if isinstance(e,GenerationCancelled):
             if self.error or self.cancelled: return

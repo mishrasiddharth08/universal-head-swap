@@ -58,7 +58,10 @@ class ZImageRuntimeTests(unittest.TestCase):
         session=self.session(*args)
         session.enter()
         self.assertEqual((p.batch_size,p.n_iter),(1,2))
-        self.assertEqual(p.denoising_strength,0.65)
+        # Body-to-head ratio maintenance enlarges the canvas for the small head
+        # (44px head -> ~352px on canvas), so no small-head denoise boost applies.
+        self.assertAlmostEqual(p.denoising_strength,0.65)
+        self.assertGreater(max(session.canvas_size),512)
         self.assertEqual(p.image_mask.size,session.canvas_size)
         self.assertIsNotNone(p.image_mask.getbbox())
         self.assertTrue(session.refs)  # Optional: scoring only, never conditioning.

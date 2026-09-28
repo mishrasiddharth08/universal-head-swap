@@ -113,21 +113,38 @@ def configure_inpaint(session):
     region=session.region
     mask=region.mask.crop(region.box)
     x0,y0,x1,y1=session.canvas_box
-    canvas=Image.new('L',session.canvas_size,0)
+    cw,ch=session.canvas_size
+    canvas=Image.new('L',(cw,ch),0)
     canvas.paste(mask.resize((x1-x0,y1-y0),Image.Resampling.LANCZOS),(x0,y0))
     if canvas.getbbox() is None:
         raise ValueError('Z-Image edit mask is empty.')
+    # Auto-adjust to the image input: the feather and denoise follow the head's
+    # on-canvas pixel size, so a small face in a wide crop and a full-frame
+    # portrait both get appropriate edges and identity strength instead of
+    # one fixed setting.
+    base=float(session.cfg['zimage_denoise'])
+    denoise=base; head_px=0
+    pose=getattr(session,'target_pose',None)
+    if pose and region.box:
+        rx0,ry0,rx1,ry1=region.box
+        sx=(x1-x0)/max(1,rx1-rx0); sy=(y1-y0)/max(1,ry1-ry0)
+        head_px=max((pose['box'][2]-pose['box'][0])*sx,(pose['box'][3]-pose['box'][1])*sy)
+    if head_px>=16:
+        feather=int(round(min(32,max(8,head_px*0.06))))
+        if head_px<256: denoise=min(1.0,base+0.05)      # tiny head: re-render more
+        elif head_px>640: denoise=max(0.1,base-0.05)    # large head: keep identity
+    else:
+        feather=max(8,min(32,cw//48))
     # Soft edges let Turbo/Base re-render cleanly into the surrounding skin and hair
     # instead of stopping on a hard circle. The latent mask stays slightly tighter
     # than the overlay mask so the outer feather is painted from well-denoised
     # context rather than a half-strength latent.
-    feather=max(8,min(32,session.canvas_size[0]//48))
     soft=canvas.filter(ImageFilter.GaussianBlur(feather))
     latent=soft.filter(ImageFilter.GaussianBlur(max(4,feather//2)))
     settings=dict(image_mask=soft, latent_mask=latent,
                   inpaint_full_res=False, inpainting_mask_invert=0,
                   inpainting_fill=1, mask_blur=0, mask_round=False,
-                  denoising_strength=float(session.cfg['zimage_denoise']))
+                  denoising_strength=denoise)
     for key,value in settings.items():
         session.set_p(key,value)
     for key in ('overlay_images','mask_for_overlay','paste_to','mask','nmask'):
@@ -135,9 +152,10 @@ def configure_inpaint(session):
     session.host.dynamic.is_referencing=False
     if hasattr(session.host.dynamic,'edit'):
         session.host.dynamic.edit=False
-    session.analysis['native_inpaint']={'denoise':settings['denoising_strength'],
+    session.analysis['native_inpaint']={'denoise':denoise,'base_denoise':base,
         'mask_source':session.cfg.get('zimage_mask_source','Face detector (fast)'),
-        'mask_feather_px':feather,'sampling_size':list(session.canvas_size),'reference_encodes':0}
+        'mask_feather_px':feather,'head_px':round(head_px) if head_px else None,
+        'sampling_size':[cw,ch],'reference_encodes':0}
 
 
 def prepare_batch(session,index):
