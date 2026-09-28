@@ -28,13 +28,17 @@ def model_size(model):
 def model_family(model,host):
     """Detect the active model family from live engine state, not filenames alone.
 
-    Returns ('klein', size) or ('qwen', None). Qwen is detected from
+    Returns ('klein', size), ('qwen', None), or ('zimage', None). Qwen is detected from
     dynamic_args.edit (set by Forge's loader for Qwen-Image-Edit checkpoints)
     plus the diffusion engine class; Klein from dynamic_args.klein.
     """
     # Loaded architecture wins over mutable flags left by UI presets.
     config_name=type(getattr(model,'model_config',None)).__name__.lower()
     engine_name=type(model).__name__.lower()
+    config=getattr(model,'model_config',None)
+    unet_config=getattr(config,'unet_config',{}) if config is not None else {}
+    if engine_name=='zimage' or config_name=='zimage' or unet_config.get('z_image_modulation',False):
+        return 'zimage',None
     if getattr(model,'text_processing_engine_qwen',None) is not None:
         if getattr(host.dynamic,'edit',False): return 'qwen',None
         return None,None
@@ -112,22 +116,29 @@ def merge_character_trigger(custom,metadata):
 
 def resolve_adapters(cfg,model,family='klein'):
     entries=registry(); size=model_size(model) if family=='klein' else None
-    wanted=cfg['lora_dropdown']
-    if cfg.get('auto_model_adapter',True) or wanted in ('Auto (match model)','None',None,''):
-        wanted=core.select_adapter({k:v.metadata for k,v in entries.items()},size,family)
     def lookup(name,strict):
         name=core.clean_name(name)
         matches=[(k,v) for k,v in entries.items() if name in (k,getattr(v,'alias',None)) or
-                 core.clean_name(v.filename).lower()==name.lower()]
+                 core.clean_name(v.filename).lower()==name.lower() or
+                 core.clean_name(v.filename).lower().endswith('/'+name.lower())]
         if not matches:
             matches=[(k,v) for k,v in entries.items() if core.clean_name(v.filename).split('/')[-1].lower()==name.lower()]
         if len(matches)!=1: raise ValueError(f'Adapter {name!r} is missing or ambiguous. Refresh adapters and select its canonical name.')
         key,entry=matches[0]; core.compatible_adapter(key,size,entry.metadata,strict,family)
         return key
+    char=cfg['char_lora_name']
+    if family=='zimage':
+        if not char or str(char).startswith('None'):
+            raise ValueError('Z-Image head swap requires a Z-Image character LoRA. Select Character LoRA; reference headshots cannot condition Z-Image.')
+        if float(cfg.get('char_lora_strength',0))<=0:
+            raise ValueError('Z-Image head swap requires Character LoRA strength above 0.')
+        return '',lookup(char,False)
+    wanted=cfg['lora_dropdown']
+    if cfg.get('auto_model_adapter',True) or wanted in ('Auto (match model)','None',None,''):
+        wanted=core.select_adapter({k:v.metadata for k,v in entries.items()},size,family)
     fs=lookup(wanted,cfg['strict_adapter'])
     # Character LoRA is family-matched too: a Qwen character LoRA must never be
     # loaded into a Klein trunk (and vice versa) even with strict checking off.
-    char=cfg['char_lora_name']
     char=lookup(char,False) if char and not str(char).startswith('None') else ''
     return fs,char
 
@@ -138,7 +149,7 @@ def token_counter(model):
     return lambda text:len(engine.tokenize([core.TOKEN.sub('',text)])[0])
 
 def option_key(opts,family='klein'):
-    if family=='qwen':
+    if family in ('qwen','zimage'):
         # Qwen-Image-Edit needs no reference toggle: dynamic_args.edit already
         # selects its reference path, and there is no Klein-style option.
         return None,None
@@ -171,14 +182,15 @@ class Session:
         self.p=p; self.cfg=cfg; self.owner=owner; self.host=host; self.model=p.sd_model if model is None else model
         self.family,self.family_size=model_family(self.model,host)
         if self.family is None:
-            raise ValueError('Head Swap could not identify the loaded model as Flux.2 Klein or Qwen Image Edit. Load one of those checkpoints.')
+            raise ValueError('Head Swap needs Flux.2 Klein, Qwen Image Edit or Z-Image. Load a supported checkpoint.')
         self.owner.last_report={'version':core.VERSION,'status':'Preparing current generation.','model_family':self.family,'model_size':self.family_size}
         self.error=None; self.cancelled=None; self.completed=[]; self.processing=None
         self.cache=core.BoundedCache(); self.hits=0; self.encodes=0
         self.snap={}; self.region=None; self.plans=[]; self.analysis={}; self.start=time.perf_counter()
         self.canvas_box=None; self.canvas_size=None; self.quality_history=[]
         self.selected_ref=None
-        self.original=core.rgb_image(p.init_images[0]); self.refs,self.labels=core.gallery_images(cfg['headshots'])
+        self.original=core.rgb_image(p.init_images[0])
+        self.refs,self.labels=([],[]) if self.family=='zimage' and not cfg['headshots'] else core.gallery_images(cfg['headshots'])
         self.fs,self.char=resolve_adapters(cfg,self.model,self.family)
         entries=registry(); self.owned_aliases=[getattr(entries[n],'alias','') for n in (self.fs,self.char) if n in entries]
         char_entry=entries.get(self.char)
@@ -218,7 +230,14 @@ class Session:
         self.scored=core.score_refs(self.refs,self.poses,self.original,self.target_pose,self.labels)
         self.analysis={'faces_detected':len(target_faces),'target_face':face_index+1,'head_px':(self.target_pose or {}).get('head_px'),
             'scores':self.scored,'detector':self.owner.analyzer.mode or self.owner.analyzer.error}
-        core.select_reference(self.scored,cfg,0,len(self.refs))
+        if self.family!='zimage' or self.refs:
+            core.select_reference(self.scored,cfg,0,len(self.refs))
+        if self.family=='zimage':
+            if cfg['edit_scope']!='Protected head edit':
+                raise ValueError('Z-Image head swap requires Head only. Use a custom mask to include other areas.')
+            if cfg['no_ref_diag']:
+                raise ValueError('Z-Image uses character LoRA inpainting; disable no-reference diagnostics.')
+            self.analysis['identity_source']='character LoRA; headshots are optional quality-check references only'
         self.target=self.original
         self.target_location=None
         if len(target_faces)>1 and self.target_pose and cfg['edit_scope']=='Full image edit':
@@ -231,7 +250,13 @@ class Session:
             if cfg['no_ref_diag']: raise ValueError('Protected head edit cannot be combined with no-reference diagnostics.')
             if getattr(p,'image_mask',None) is not None: raise ValueError('Use the plain img2img tab with Protected head edit; upload an optional mask inside the extension.')
             preserve_hair=not any(cfg.get(k) for k in ('hairstyle','hair_color','rand_hairstyle','rand_hair_color'))
-            self.region=core.build_region(self.original,self.target_pose,cfg['crop_padding'],cfg['mask_feather'],cfg['custom_mask'],preserve_hair=preserve_hair)
+            custom_mask=cfg['custom_mask']
+            if self.family=='zimage':
+                from . import zimage
+                custom_mask=zimage.prepare_mask(self.original,self.target_pose,cfg,custom_mask)
+            self.region=core.build_region(self.original,self.target_pose,cfg['crop_padding'],cfg['mask_feather'],custom_mask,preserve_hair=preserve_hair)
+            if self.family=='zimage':
+                self.region=zimage.protect_sam3_neck(self.region,self.target_pose,cfg)
             self.target=self.region.crop
             side=self.requested_side(); w,hh=self.target.size
             scale=side/max(w,hh); w=max(64,round(w*scale/64)*64); hh=max(64,round(hh*scale/64)*64)
@@ -240,6 +265,9 @@ class Session:
             self.set_p('init_images',[self.target]); self.set_p('width',w); self.set_p('height',hh)
             self.set_p('resize_mode',0); self.set_p('resize_by',1.0)
             self.set_p('color_corrections',[]); self.set_p('restore_faces',False)
+            if self.family=='zimage':
+                from . import zimage
+                zimage.configure_inpaint(self)
         elif cfg['keep_original_canvas']:
             # Preserve the user's sampling-size budget while respecting target geometry.
             side=max(64,int(max(p.width,p.height))); w,hh=self.original.size
@@ -265,6 +293,11 @@ class Session:
         import re
         match=re.search(r'\d+',str(self.cfg['resolution_dropdown']))
         side=int(match.group()) if match else 1024
+        if self.family=='zimage':
+            # Honor both Forge's chosen generation size and available memory.
+            side=min(side,max(256,int(max(self.p.width,self.p.height))))
+            _,total,free=device_policy(self.host)
+            return core.memory_limits(total,free,side,self.cfg['reference_budget'])[0]
         if self.cfg['auto_adapt'] and self.target_pose and self.target_pose['head_px']<220: side=max(side,1280)
         return min(2048,max(256,side))
     def fail(self,e):
@@ -295,8 +328,12 @@ class Session:
             negative=p.all_negative_prompts[i]
             preset=self.owner.custom.get('negative_presets',{}).get(cfg['neg_preset_dropdown'],'')
             if preset: negative=core.merge_negatives(negative,[preset])
-            plan=core.build_plan(text,negative,cfg,p.all_seeds[i],self.owner.choices,self.fs,self.char,
-                                 p.cfg_scale,(self.target_pose or {}).get('head_px'),token_counter(self.model),self.owned_aliases,self.target_location)
+            if self.family=='zimage':
+                plan=core.build_zimage_plan(text,negative,cfg,p.all_seeds[i],self.owner.choices,self.char,
+                                           p.cfg_scale,token_counter(self.model),self.owned_aliases)
+            else:
+                plan=core.build_plan(text,negative,cfg,p.all_seeds[i],self.owner.choices,self.fs,self.char,
+                                     p.cfg_scale,(self.target_pose or {}).get('head_px'),token_counter(self.model),self.owned_aliases,self.target_location)
             if qwen_delta:
                 # Forge's Qwen engine numbers the target image as Picture 0 and
                 # prepends its own image prompts; shift the plan's references.
@@ -307,8 +344,10 @@ class Session:
         self.set_p('cfg_scale',self.plans[0].cfg)
         active=self.plans[0].cfg!=1.0
         p.extra_generation_params['Klein negative guidance']='active' if active else 'inactive (CFG 1.0)'
-        print(f'[UniversalHeadSwap] CFG {self.plans[0].cfg:g}; negative guidance '+('active' if active else 'OFF. Select Positive + Negative to use removal negatives.'))
-        p.extra_generation_params['Universal Head Swap']=f'{core.VERSION} | {cfg["edit_scope"]} | {self.fs}'
+        advice='OFF for Z-Image Turbo; use positive appearance controls.' if self.family=='zimage' and cfg['zimage_variant']=='Turbo' else 'OFF. Select Positive + Negative to use removal negatives.'
+        print(f'[UniversalHeadSwap] CFG {self.plans[0].cfg:g}; negative guidance '+('active' if active else advice))
+        adapter_label=self.char if self.family=='zimage' else self.fs
+        p.extra_generation_params['Universal Head Swap']=f'{core.VERSION} | {self.family} | {cfg["edit_scope"]} | {adapter_label}'
         p.extra_generation_params['Klein settings']=json.dumps({k:cfg[k] for k in core.SAVE_KEYS},ensure_ascii=False,separators=(',',':'))
         if self.region or self.canvas_box: p.extra_generation_params['Klein output size']=f'{self.original.width}x{self.original.height}'
     def _cancel_check(self):
@@ -375,6 +414,10 @@ class Session:
     def batch(self,index):
         self._cancel_check(); h=self.host; p=self.p; cfg=self.cfg
         if self.error: raise RuntimeError(self.error)
+        if self.family=='zimage':
+            from . import zimage
+            zimage.prepare_batch(self,index)
+            return
         if cfg['no_ref_diag']:
             self.model.ref_latents=[]; self.model.ini_latent=None; h.dynamic.ref_latents=[]; return
         selected,reason=core.select_reference(self.scored,cfg,index,len(self.refs))
@@ -455,7 +498,7 @@ class Session:
                 if cfg['geometry_match'] and (self.region or cfg.get('geometry_correct',False)):
                     try:
                         if self.region:
-                            corrected,correction=core.align_protected_head(image,baseline,target_pose,generated_pose)
+                            corrected,correction=core.align_protected_head(image,baseline,target_pose,generated_pose,preserve_aspect=self.family=='zimage')
                         else:
                             corrected,correction=core.correct_head_scale(image,target_pose,generated_pose)
                         verified=core.nearest_face(self.owner.analyzer.faces(corrected),target_pose,corrected.size)
@@ -554,7 +597,7 @@ def install_bridge(processing,host):
         # Guard before any mutation. Force mode cannot turn an unsupported model into a supported one.
         family,_=model_family(p.sd_model,host)
         if family is None:
-            raise ValueError('Head Swap is enabled, but the loaded model is not Flux.2 Klein or Qwen Image Edit. Disable the extension or load a supported checkpoint.')
+            raise ValueError('Head Swap is enabled, but the loaded model is not Flux.2 Klein, Qwen Image Edit or Z-Image. Disable it or load a supported checkpoint.')
         if not getattr(p,'init_images',None): raise ValueError('Head Swap needs an img2img target image.')
         if any(im is not p.init_images[0] and core.image_hash(im)!=core.image_hash(p.init_images[0]) for im in p.init_images[1:]):
             raise ValueError('Process one target per request. Use Forge Batch for separate target files.')

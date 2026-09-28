@@ -1,5 +1,14 @@
 # Changelog
 
+## 28 September 2026 — Z-Image native head swap
+
+- Added native Z-Image Turbo/Base character-LoRA inpainting with optional local CPU SAM3 masks. Z-Image does not use BFS/reference conditioning.
+- Preserve facial aspect ratio during Z-Image alignment; reject corrections that fail existing geometry checks. Qwen/Klein behavior unchanged.
+- Resolve character LoRAs in subfolders and use neutral appearance descriptions for Turbo cleanup.
+- 179 tests and 2 subtests passed. Live Turbo BF16: two saved 1024x1280 outputs in 35.93 seconds, peak total GPU allocation 14,102 MiB on RTX 5090. Both preserved every pixel outside the protected mask; final face height errors 4.15%/5.52%, width errors 4.23%/3.67%.
+- These measurements do not establish identity fidelity, universal cleanup, Base/SAM3 execution, all quantizations, or 6/8 GB compatibility. Body tattoos and jewelry outside the head mask remain untouched.
+
+
 ## 28 September 2026 — proportions and layout
 
 - Added bounded width/height correction for short, wide generated faces, anchored to the source chin. Unsafe corrections still fail the alignment guard.

@@ -226,6 +226,15 @@ class GeometryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             core.align_protected_head(generated,baseline,target,{'box':(0,0,199,199)})
 
+    def test_zimage_alignment_preserves_facial_aspect(self):
+        image=Image.new('RGB',(320,320),'green')
+        target={'box':(100,70,200,230)}
+        source={'box':(99.38,94.544,200.62,230)}
+        _,report=core.align_protected_head(image,image,target,source,preserve_aspect=True)
+        self.assertEqual(report['scale_x'],report['scale_y'])
+        self.assertEqual(report['anchor'],'source chin')
+        self.assertLess(report['scale_y'],1.10)
+
     def test_protected_alignment_restores_short_wide_face_and_chin(self):
         from PIL import ImageDraw
         baseline=Image.new('RGB',(320,320),'blue')
@@ -395,6 +404,52 @@ class StorageTests(unittest.TestCase):
         entries={'bfs_head_v5_qwen_image_edit':{},'bfs_head_v1_flux-klein_9b':{}}
         self.assertEqual(core.select_adapter(entries,None,family='qwen'),'bfs_head_v5_qwen_image_edit')
         with self.assertRaises(ValueError): core.select_adapter(entries,None,family='klein')
+
+    def test_zimage_character_lora_plan_has_no_bfs_or_picture_reference(self):
+        cfg={'zimage_variant':'Turbo','char_lora_trigger':'person_z'}
+        plan=core.build_zimage_plan('portrait','avoid blur',cfg,1,core.choices({}),'characters/person_z',host_cfg=7.0)
+        self.assertEqual(plan.cfg,1.0)
+        self.assertIn('<lora:characters/person_z:0.70>',plan.positive)
+        self.assertNotIn('bfs_head',plan.positive.lower())
+        self.assertNotIn('Picture ',plan.positive)
+        self.assertTrue(any('reference headshots are not used' in note for note in plan.notes))
+
+    def test_zimage_plan_requires_character_lora_and_base_keeps_cfg(self):
+        with self.assertRaisesRegex(ValueError,'requires a character LoRA'):
+            core.build_plan('', '', {},1,core.choices({}),'',family='zimage')
+        plan=core.build_plan('', '', {'zimage_variant':'Base'},1,core.choices({}),'','person',
+                             host_cfg=4.5,family='zimage')
+        self.assertEqual(plan.cfg,4.5)
+
+    def test_zimage_rejects_stale_bfs_prompt_tag(self):
+        with self.assertRaisesRegex(ValueError,'does not match Z-Image'):
+            core.build_zimage_plan('portrait <lora:bfs_head_v1_qwen_2.1:1>', '', {},1,
+                                   core.choices({}),'person-ZIT')
+
+    def test_zimage_preserves_compatible_and_unknown_prompt_tags(self):
+        text='portrait <lora:person-ZIT:0.8> <lora:cinematic_style:0.4> <lora:turbo_detail:0.2>'
+        plan=core.build_zimage_plan(text,'',{},1,core.choices({}),'character-ZIT')
+        self.assertIn('<lora:person-ZIT:0.8>',plan.positive)
+        self.assertIn('<lora:cinematic_style:0.4>',plan.positive)
+        self.assertIn('<lora:turbo_detail:0.2>',plan.positive)
+
+    def test_zimage_remove_uses_descriptive_clean_anatomy_without_object_names(self):
+        plan=core.build_zimage_plan('', '', {},1,core.choices({}),'character-ZIT')
+        prompt=plan.positive.lower()
+        for term in ('bindi','sindoor','tikka','tilak','kumkum','earring','jewelry','tattoo',
+                     'henna','piercing','crucifix','cross symbol','nose stud','nose pin'):
+            self.assertNotIn(term,prompt)
+        for phrase in ('plain unmarked forehead','bare natural earlobes','clear natural visible skin',
+                       'one natural face with coherent eyes'):
+            self.assertIn(phrase,prompt)
+
+    def test_zimage_adapter_family_and_settings(self):
+        self.assertEqual(core.adapter_family('people/alice',{'ss_base_model_version':'Tongyi-MAI/Z-Image-Turbo'}),('zimage',None))
+        with self.assertRaises(ValueError):
+            core.compatible_adapter('bfs_head_v5_qwen_image_edit',None,family='zimage')
+        cfg=core.normalize({'zimage_variant':'bad','zimage_denoise':5,'zimage_mask_source':'bad'})
+        self.assertEqual((cfg['zimage_variant'],cfg['zimage_denoise'],cfg['zimage_mask_source']),
+                         ('Turbo',1.0,'Face detector (fast)'))
 
     def test_qwen_picture_remap(self):
         self.assertEqual(core.remap_picture_refs('use Picture 1 as the target; use Picture 2 identity',-1),

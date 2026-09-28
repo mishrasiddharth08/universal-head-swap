@@ -210,6 +210,12 @@ class RuntimeTests(unittest.TestCase):
             model=NS(model_config=type(f'Flux2K{size}B',(),{})())
             self.assertEqual(runtime.model_family(model,NS(dynamic=NS(klein=False))),('klein',size))
 
+    def test_zimage_architecture_wins_over_stale_flags(self):
+        ZImage=type('ZImage',(),{})
+        model=ZImage(); model.model_config=NS(unet_config={})
+        host=NS(dynamic=NS(klein=True,edit=True))
+        self.assertEqual(runtime.model_family(model,host),('zimage',None))
+
     def test_bridge_returns_existing_wrapper(self):
         processing=NS(process_images_inner=lambda p:p)
         first=runtime.install_bridge(processing,NS())

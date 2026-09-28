@@ -1,0 +1,158 @@
+"""Optional, local-only SAM3 text-mask adapter.
+
+Nothing is imported, installed, or downloaded until ``mask`` is called.
+Call ``release`` before the generation model is loaded to return SAM3 VRAM.
+"""
+from contextlib import nullcontext, suppress
+import gc
+from pathlib import Path
+import threading
+
+import numpy as np
+from PIL import Image
+
+from .core import BoundedCache, image_hash
+
+
+class SAM3Masker:
+    def __init__(self, checkpoint, bpe_path=None, device="cuda", cache_bytes=8 * 1024**2,
+                 loader=None):
+        self.checkpoint = Path(checkpoint) if checkpoint else None
+        self.bpe_path = Path(bpe_path) if bpe_path else None
+        self.device = device
+        self.loader = loader
+        self.processor = None
+        self.model = None
+        self.error = ""
+        self.lock = threading.RLock()
+        self.cache = BoundedCache(cache_bytes)
+
+    @property
+    def available(self):
+        return bool(self.loader or (self.checkpoint and self.checkpoint.is_file()))
+
+    def _load(self):
+        if self.processor is not None:
+            return
+        if not self.available:
+            raise RuntimeError("SAM3 checkpoint is missing; automatic downloads are disabled.")
+        if self.loader:
+            loaded = self.loader()
+            self.model, self.processor = loaded if isinstance(loaded, tuple) else (None, loaded)
+            if self.model is not None and hasattr(self.model, "eval"):
+                self.model.eval()
+            return
+        try:
+            from sam3.model_builder import build_sam3_image_model
+            from sam3.model.sam3_image_processor import Sam3Processor
+        except ImportError as exc:
+            raise RuntimeError("SAM3 is not installed in this Forge environment.") from exc
+        kwargs = dict(checkpoint_path=str(self.checkpoint), load_from_HF=False,
+                      device=self.device, compile=False)
+        if self.bpe_path:
+            if not self.bpe_path.is_file():
+                raise RuntimeError("SAM3 tokenizer file is missing.")
+            kwargs["bpe_path"] = str(self.bpe_path)
+        self.model = build_sam3_image_model(**kwargs)
+        if hasattr(self.model, "eval"):
+            self.model.eval()
+        self.processor = Sam3Processor(self.model, device=self.device)
+
+    @staticmethod
+    def _inference_context():
+        try:
+            import torch
+            return torch.inference_mode()
+        except ImportError:
+            return nullcontext()
+
+    @staticmethod
+    def _cpu(value):
+        for name in ("detach", "float", "cpu"):
+            method = getattr(value, name, None)
+            if method:
+                value = method()
+        return np.asarray(value)
+
+    @staticmethod
+    def _choose(masks, boxes, scores, face_box):
+        count = len(masks)
+        if not count:
+            return None
+        scores = np.ravel(scores) if scores is not None else np.zeros(count)
+        if face_box is None:
+            return int(np.argmax(scores[:count]))
+        if boxes is None or len(boxes) != count:
+            return None
+        fx0, fy0, fx1, fy1 = map(float, face_box)
+        fc = ((fx0 + fx1) / 2, (fy0 + fy1) / 2)
+        best = None
+        for i, box in enumerate(boxes):
+            x0, y0, x1, y1 = map(float, box)
+            ix = max(0, min(fx1, x1) - max(fx0, x0))
+            iy = max(0, min(fy1, y1) - max(fy0, y0))
+            overlap = ix * iy / max(1, (fx1 - fx0) * (fy1 - fy0))
+            inside = x0 <= fc[0] <= x1 and y0 <= fc[1] <= y1
+            rank = (inside, overlap, float(scores[i]) if i < len(scores) else 0)
+            if best is None or rank > best[0]:
+                best = (rank, i)
+        return best[1] if best and best[0][1] > 0 else None
+
+    def mask(self, image, prompt="head", confidence=0.2, face_box=None):
+        image = image.convert("RGB")
+        key = (image_hash(image), prompt.strip().lower(), round(float(confidence), 3),
+               tuple(round(float(x), 1) for x in face_box) if face_box else None)
+        with self.lock:
+            self.error = ""
+            cached = self.cache.get(key)
+            if cached is not None:
+                return cached.copy()
+            try:
+                self._load()
+                with self._inference_context():
+                    if hasattr(self.processor, "set_confidence_threshold"):
+                        self.processor.set_confidence_threshold(float(confidence))
+                    state = self.processor.set_image(image)
+                    output = self.processor.set_text_prompt(prompt.strip(), state)
+                masks = self._cpu(output.get("masks", []))
+                if masks.ndim == 4:
+                    masks = masks[:, 0]
+                boxes = self._cpu(output.get("boxes")) if output.get("boxes") is not None else None
+                scores = self._cpu(output.get("scores")) if output.get("scores") is not None else None
+                chosen = self._choose(masks, boxes, scores, face_box)
+                if chosen is None:
+                    return None
+                values = np.asarray(masks[chosen])
+                if values.dtype == np.bool_:
+                    binary = values
+                else:
+                    finite = values[np.isfinite(values)]
+                    threshold = 0.5 if finite.size and finite.min() >= 0 and finite.max() <= 1 else 0.0
+                    binary = values > threshold
+                result = Image.fromarray(binary.astype(np.uint8) * 255, "L")
+                if result.size != image.size:
+                    result = result.resize(image.size, Image.Resampling.NEAREST)
+                self.cache.put(key, result.copy(), result.width * result.height)
+                return result
+            except Exception as exc:
+                self.error = str(exc)
+                self.release()
+                return None
+
+    def release(self, clear_cache=False):
+        """Unload SAM3; cached masks remain CPU-only unless explicitly cleared."""
+        with self.lock:
+            self.processor = None
+            self.model = None
+            if clear_cache:
+                self.cache.clear()
+            gc.collect()
+            with suppress(Exception):
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            with suppress(Exception):
+                from backend import memory_management
+                memory_management.soft_empty_cache()
+
+    close = release

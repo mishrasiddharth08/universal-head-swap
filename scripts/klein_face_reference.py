@@ -1,6 +1,6 @@
-"""Universal Head Swap 7.0: dual-model UI and scoped lifecycle integration.
+"""Universal Head Swap: model-aware UI and scoped lifecycle integration.
 
-Serves both FLUX.2 Klein and Qwen Image Edit 2.1 checkpoints. The active mode
+Serves FLUX.2 Klein, Qwen Image Edit 2.1 and native Z-Image checkpoints. The active mode
 is detected from the loaded model at generation time; all features are shared.
 """
 from pathlib import Path
@@ -58,7 +58,7 @@ def _reload_extension_helpers():
     # top-level bridge was removed above and is installed once below.
     import importlib
     order=('khs.negative_catalog','khs.data','khs.core','khs.moire','khs.saving',
-           'khs.vision','khs.identity','khs.runtime','khs.external')
+           'khs.vision','khs.identity','khs.sam3_mask','khs.zimage','khs.runtime','khs.external')
     for name in order:
         module=sys.modules.get(name)
         if module is not None:
@@ -84,6 +84,8 @@ except Exception as e:
     print('[UniversalHeadSwap] '+BRIDGE_ERROR)
 INSTANCES=[]
 def unload():
+    from khs.zimage import clear_mask_cache
+    clear_mask_cache()
     for instance in INSTANCES:
         instance.analyzer.close()
         instance.auditor.close()
@@ -135,7 +137,7 @@ class UniversalHeadSwap(scripts.Script):
 .uhs-panel button {border-radius:8px}
 .uhs-panel .prose p {margin:.25rem 0}
 </style>''')
-            gr.Markdown('Add the target in **img2img**, add headshots below, then press **Generate**. The matching BFS LoRA is selected automatically.')
+            gr.Markdown('Add the target in **img2img**, then press **Generate**. Klein / Qwen use headshots + matching BFS. **Z-Image uses a character LoRA**; headshots are optional quality references.')
             if BRIDGE_ERROR:
                 gr.Markdown('**Unavailable:** '+BRIDGE_ERROR); C['enable'].interactive=False
             if self.custom_error: gr.Markdown('**Custom preset warning:** '+self.custom_error)
@@ -147,13 +149,21 @@ class UniversalHeadSwap(scripts.Script):
                         with gr.Column(scale=1):
                             drop('lora_dropdown','Head-swap LoRA (BFS)',['Auto (match model)']+names)
                             check('auto_model_adapter','Match BFS to selected model automatically')
-                            drop('char_lora_name','Character LoRA (optional)',['None (skip)']+names)
+                            drop('char_lora_name','Character LoRA (required for Z-Image)',['None (skip)']+names)
                             with gr.Accordion('LoRA strengths and trigger',open=False):
                                 slide('lora_strength','BFS strength',0.05,2,0.05)
                                 slide('char_lora_strength','Character strength',-2,2,0.05)
                                 text('char_lora_trigger','Character trigger words')
                                 check('strict_adapter','Check model compatibility')
                             refresh=gr.Button('Refresh LoRAs',size='sm')
+                    with gr.Accordion('Z-Image · character LoRA inpainting',open=False):
+                        gr.Markdown('Choose a matching **Character LoRA** above. BFS is not used. Keep **Head only**. Turbo uses CFG 1; Forge controls the step count. Start around 8–9 steps for Turbo; Base needs its usual settings.')
+                        with gr.Row():
+                            drop('zimage_variant','Z-Image model type',['Turbo','Base'])
+                            slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05)
+                        drop('zimage_mask_source','Z-Image mask',['Face detector (fast)','SAM3 (optional)'])
+                        text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Optional: full path to an installed SAM3 checkpoint')
+                        gr.Markdown('A custom white-on-black mask takes priority. SAM3 needs its separately installed package and weights; it runs on CPU and is released before sampling. Nothing downloads automatically.')
                     C['edit_scope']=gr.Radio(choices=[('Head only · keep scene','Protected head edit'),('Whole image · restyle','Full image edit')],value=defaults['edit_scope'],label='Edit area')
                     with gr.Row():
                         identity_setup=gr.Button('Identity only · clear style changes',variant='primary')
@@ -256,7 +266,7 @@ class UniversalHeadSwap(scripts.Script):
                 with gr.Tab('4 · Settings',id='settings'):
                     with gr.Accordion('Speed & memory',open=False):
                         with gr.Row():
-                            drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
+                            drop('resolution_dropdown','Maximum reference / Z-Image crop side',['512','768','1024','1280','1536','2048'])
                             slide('reference_budget','Combined reference budget · megapixels',0.5,8,0.25)
                         with gr.Row():
                             check('cache_encodes','Reuse unchanged encodings')
@@ -311,6 +321,8 @@ class UniversalHeadSwap(scripts.Script):
             def sync_adapter(preset,checkpoint,automatic):
                 if not automatic: return gr.update()
                 key=str(preset).lower()
+                if key in ('zit','zib') or 'zimage' in key.replace('-','').replace('_','').replace(' ',''):
+                    return gr.update(choices=['Auto (match model)','Not used (Z-Image)']+names,value='Not used (Z-Image)')
                 if 'qwen' in key: family,size='qwen',None
                 elif 'klein' in key:
                     checkpoint=str(checkpoint or '').lower()
@@ -382,13 +394,17 @@ class UniversalHeadSwap(scripts.Script):
     def preview(self,image,prompt,negative,seed,guidance,*args):
         try:
             if not HOST: raise ValueError(BRIDGE_ERROR)
-            cfg=core.normalize(args); im=core.rgb_image(image); refs,labels=core.gallery_images(cfg['headshots'])
+            cfg=core.normalize(args); im=core.rgb_image(image)
+            refs,labels=([],[])
             family,_=runtime.model_family(HOST.shared.sd_model,HOST)
-            if family is None: raise ValueError('Load a supported checkpoint (Flux.2 Klein or Qwen Image Edit) to check setup.')
+            if family is None: raise ValueError('Load Flux.2 Klein, Qwen Image Edit or Z-Image to check setup.')
+            if family!='zimage' or cfg['headshots']: refs,labels=core.gallery_images(cfg['headshots'])
             fs,char=runtime.resolve_adapters(cfg,HOST.shared.sd_model,family)
             faces=self.analyzer.faces(im); index=cfg['target_face']-1
             if faces and index>=len(faces): raise ValueError('Selected target face not detected.')
             pose=faces[index] if faces else None; ref_poses=[]
+            if family=='zimage':
+                return self.preview_zimage(im,pose,cfg,char,prompt,negative,seed,guidance)
             for ref in refs:
                 found=self.analyzer.faces(ref); ref_poses.append(found[0] if found else None)
             scored=core.score_refs(refs,ref_poses,im,pose,labels); slot,reason=core.select_reference(scored,cfg,0,len(refs))
@@ -412,6 +428,28 @@ class UniversalHeadSwap(scripts.Script):
             guidance_status='negative prompts OFF' if plan.cfg==1 else 'negative prompts active'
             return display,f'{len(faces)} target faces; slot {slot+1}: {reason}; {guidance_status} (CFG {plan.cfg:g})',overlay,refs[slot],report
         except Exception as e: raise gr.Error(str(e))
+
+    def preview_zimage(self,im,pose,cfg,char,prompt,negative,seed,guidance):
+        from khs import zimage
+        if cfg['edit_scope']!='Protected head edit':
+            raise ValueError('Z-Image head swap requires Head only.')
+        entries=runtime.registry(); entry=entries.get(char)
+        cfg=dict(cfg)
+        cfg['char_lora_trigger']=runtime.merge_character_trigger(cfg['char_lora_trigger'],getattr(entry,'metadata',{}))
+        preset=self.custom.get('negative_presets',{}).get(cfg['neg_preset_dropdown'],'')
+        if preset: negative=core.merge_negatives(negative,[preset])
+        fixed=max(0,int(seed or 0))
+        plan=core.build_zimage_plan(prompt,negative,cfg,fixed,self.choices,char,guidance,
+                                   runtime.token_counter(HOST.shared.sd_model),[getattr(entry,'alias','')])
+        mask=zimage.prepare_mask(im,pose,cfg,cfg['custom_mask'])
+        preserve=not any(cfg.get(k) for k in ('hairstyle','hair_color','rand_hairstyle','rand_hair_color'))
+        region=core.build_region(im,pose,cfg['crop_padding'],cfg['mask_feather'],mask,preserve_hair=preserve)
+        region=zimage.protect_sam3_neck(region,pose,cfg)
+        overlay=Image.composite(Image.blend(im,Image.new('RGB',im.size,(50,200,120)),.35),im,region.mask)
+        report={'model_family':'zimage','identity_source':'character LoRA','plan':plan.report(),
+                'crop_box':region.box,'reference_encodes':0,'preview_is_example':int(seed or 0)<0}
+        display=plan.positive+'\n\nNegative prompt'+(' (inactive at CFG 1)' if plan.cfg==1 else '')+': '+plan.negative
+        return display,f'Z-Image {cfg["zimage_variant"]}: character LoRA; denoise {cfg["zimage_denoise"]:g}; CFG {plan.cfg:g}',overlay,None,report
 
     def generation_report(self):
         report=dict(self.last_report)

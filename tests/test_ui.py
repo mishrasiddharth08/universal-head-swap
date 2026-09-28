@@ -55,10 +55,12 @@ class UIConstructionTests(unittest.TestCase):
                             checkpoint=f'{preset}-{size}b-{quant}'
                             self.assertEqual(callbacks[0](preset,checkpoint,True)['value'],expected)
                     self.assertNotIn('value',callbacks[0]('klein','klein-9b',False))
+                    self.assertEqual(callbacks[0]('zimage','Z-Image-Turbo-Q4.gguf',True)['value'],'Not used (Z-Image)')
+                    self.assertEqual(callbacks[0]('zit','Z-Image-Turbo-BF16.safetensors',True)['value'],'Not used (Z-Image)')
                 self.assertEqual(len(controls),len(core.ARG_KEYS))
                 self.assertEqual(len({id(c) for c in controls}),len(controls))
                 for c in controls: self.assertIsInstance(c,gr.components.Component)
-                for key in ('geometry_match','match_sharpness','removal_priority','quality_strict','keep_original_canvas'):
+                for key in ('geometry_match','match_sharpness','removal_priority','quality_strict','keep_original_canvas','zimage_variant','zimage_denoise','zimage_mask_source','sam3_checkpoint'):
                     self.assertTrue(controls[core.ARG_KEYS.index(key)].visible)
             ui.unload()
 

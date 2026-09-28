@@ -19,3 +19,6 @@ Thumbs.db
 !scripts/models/identity-models.json
 !scripts/models/face_detection_yunet-LICENSE.txt
 !scripts/models/face_recognition_sface-LICENSE.txt
+
+# Local validation inputs, outputs and telemetry
+/work/

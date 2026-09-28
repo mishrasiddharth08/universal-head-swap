@@ -34,7 +34,8 @@ LEGACY_KEYS = [
 NEW_KEYS = ['edit_scope','target_face','crop_padding','mask_feather','custom_mask','earrings','reference_framing',
             'reference_budget','tiny_head_boost','strict_adapter','color_match','cache_encodes','ban_jewelry',
             'removal_priority','match_sharpness','geometry_match','quality_strict','keep_original_canvas',
-            'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength','auto_model_adapter','qwen_detail_crop']
+            'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength','auto_model_adapter','qwen_detail_crop',
+            'zimage_variant','zimage_denoise','zimage_mask_source','sam3_checkpoint']
 ARG_KEYS = LEGACY_KEYS + NEW_KEYS
 APPEARANCE = ('bindi','earrings','tattoos','piercings','cross','jewelry')
 POLICIES = ['Preserve', 'Remove', 'Use prompt / preset']
@@ -52,7 +53,8 @@ DEFAULTS.update(qwen_detail_crop=True,auto_model_adapter=True,enable=False,heads
     mask_feather=0.08,custom_mask=None,reference_framing='Head crop (recommended)',reference_budget=2.5,
     tiny_head_boost=False,strict_adapter=True,color_match=0.35,cache_encodes=True,removal_priority=True,
     match_sharpness=True,geometry_match=True,quality_strict=False,keep_original_canvas=True,
-    identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5)
+    identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5,
+    zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='Face detector (fast)',sam3_checkpoint='')
 DEFAULTS.update({k:[] for k in CATEGORIES})
 DEFAULTS.update({'ban_'+k:'Remove' for k in APPEARANCE})
 EXCLUDE_SAVE = {'enable','headshots','custom_mask','preset_dropdown','preset_save_name','preset_save_btn',
@@ -86,7 +88,8 @@ def normalize(values=None):
     numeric = {'lora_strength':(0.05,2), 'char_lora_strength':(-2,2),'expression_strength':(0.1,2),
                'blend_slider':(0,100),'target_face':(1,20),'crop_padding':(0.2,1.5),'mask_feather':(0,0.25),
                'reference_budget':(0.5,8),'latent_sharpness':(0,2),'hdr_gain':(0,1),'dof_blur':(0,20),
-               'grain_amount':(0,0.1),'sharpness':(0,200),'color_match':(0,0.5),'identity_threshold':(0,1),'moire_strength':(0,1)}
+               'grain_amount':(0,0.1),'sharpness':(0,200),'color_match':(0,0.5),'identity_threshold':(0,1),'moire_strength':(0,1),
+               'zimage_denoise':(0.1,1.0)}
     for k,(low,high) in numeric.items():
         try: value=float(cfg[k])
         except (TypeError,ValueError): value=float(DEFAULTS[k])
@@ -111,6 +114,9 @@ def normalize(values=None):
     if cfg['ratio_mode'] not in RATIO_MODES: cfg['ratio_mode']=RATIO_MODES[1]
     if cfg['reference_framing'] not in ('Head crop (recommended)','Unmodified reference','Match target framing (experimental)'):
         cfg['reference_framing']='Head crop (recommended)'
+    if cfg['zimage_variant'] not in ('Turbo','Base'): cfg['zimage_variant']='Turbo'
+    if cfg['zimage_mask_source'] not in ('Face detector (fast)','SAM3 (optional)'):
+        cfg['zimage_mask_source']='Face detector (fast)'
     for k in CATEGORIES:
         cfg[k]=[str(x) for x in cfg[k]] if isinstance(cfg[k],(tuple,list)) else ([str(cfg[k])] if cfg[k] else [])
     return cfg
@@ -193,6 +199,14 @@ BAN_POS={'bindi':'remove every bindi, sindoor, tikka, tilak, kumkum and forehead
          'piercings':'remove all body piercings and piercing jewelry everywhere, including ears, nose, septum, lips, eyebrows, tongue, chest, navel and dermal studs; natural skin without rings, studs or barbells',
          'cross':'remove all cross symbols, crucifixes and cross ornaments anywhere in the image',
          'jewelry':'remove all jewelry, necklaces, pendants, bangles, bracelets, rings, anklets, brooches and nose pins'}
+ZIMAGE_CLEAN_POS={
+    'bindi':'plain unmarked forehead and natural clean hair parting',
+    'earrings':'bare natural earlobes',
+    'tattoos':'clear natural visible skin with consistent pores and texture',
+    'piercings':'natural unadorned nose, ears, lips, eyebrows and visible skin',
+    'cross':'plain clothing and background without added symbols',
+    'jewelry':'unadorned neck, wrists, hands, ankles and nose',
+}
 BAN_NEG={'bindi':['bindi','sindoor','forehead mark'],'earrings':['earrings','ear jewelry'],
          'tattoos':['tattoos','inked skin'],'piercings':['body piercing','navel piercing'],
          'cross':['cross symbol','crucifix']}
@@ -224,6 +238,10 @@ def adapter_family(name,metadata=None):
     size=re.search(r'(?:klein[\W_]*|flux2k?[^\s]*?)([49])b\b',text) or re.search(r'\b([49])b\b',text.replace('_',' '))
     if 'klein' in text or re.search(r'flux[\W_]*2k(?:[\W_]*[49]b)?\b',text):
         return 'klein',int(size.group(1)) if size else None
+    if (re.search(r'\bz[\W_]*image(?:[\W_]*(?:turbo|base))?\b',text)
+            or re.search(r'(?<![a-z0-9])zi[bt](?![a-z0-9])',text)
+            or 'tongyi-mai/z-image' in text):
+        return 'zimage',None
     if 'qwen' in text.replace('_','-') or 'qwen' in text:
         qsize=re.search(r'qwen[\W_-]*(?:image[\W_-]*)?(?:edit[\W_-]*)?(\d+(?:\.\d+)?)',text)
         return 'qwen',float(qsize.group(1)) if qsize else None
@@ -231,7 +249,7 @@ def adapter_family(name,metadata=None):
         return 'other',None
     return 'unknown',None
 
-FAMILY_LABEL={'klein':'Klein','qwen':'Qwen Image'}
+FAMILY_LABEL={'klein':'Klein','qwen':'Qwen Image','zimage':'Z-Image'}
 
 def compatible_adapter(name,size,metadata=None,strict=True,family='klein'):
     found_family,found=adapter_family(name,metadata)
@@ -312,13 +330,23 @@ class Plan:
     token_count: int | None = None
     def report(self): return {**asdict(self),'negative_guidance_active':self.cfg!=1.0}
 
-def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=1.0,head_px=None,token_counter=None,owned_aliases=(),target_location=None,weighted=True):
+def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=1.0,head_px=None,token_counter=None,owned_aliases=(),target_location=None,weighted=True,family='klein'):
     cfg=normalize(cfg); rng=random.Random(int(seed)); notes=[]
+    if family=='zimage':
+        if not char_name:
+            raise ValueError('Z-Image head swap requires a character LoRA; reference headshots are not native Z-Image identity conditioning.')
+        if float(cfg['char_lora_strength'])<=0:
+            raise ValueError('Z-Image head swap requires Character LoRA strength above 0.')
     owned={clean_name(n).lower() for n in (fs_name,char_name,*owned_aliases) if n}
     extra_tags=[]
     def separate(m):
         body=m.group(1); name=body.split(':')[0]
-        if clean_name(name).lower() not in owned: extra_tags.append(m.group(0))
+        if clean_name(name).lower() not in owned:
+            if family=='zimage':
+                tag_family,_=adapter_family(name)
+                if tag_family in ('klein','qwen','other'):
+                    raise ValueError(f'LoRA tag {clean_name(name)!r} does not match Z-Image. Remove the stale Klein/Qwen/SD tag or choose a Z-Image LoRA.')
+            extra_tags.append(m.group(0))
         return ''
     user_text=TOKEN.sub(separate,str(user or '')).strip()
     resolved={}
@@ -329,7 +357,10 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
         phrase=_resolve_category(category,cfg[category],cfg,all_choices,rng)
         if phrase and category=='expression' and cfg['expression_strength']!=1:
             phrase=f'({phrase}:{cfg["expression_strength"]:.2f})'
-        if phrase: resolved[category]=phrase
+        if phrase:
+            if family=='zimage':
+                phrase=phrase.replace('Picture 1','the source image').replace('Picture 2','the character adapter')
+            resolved[category]=phrase
     appearances={}
     for key in APPEARANCE:
         policy=cfg['ban_'+key]
@@ -353,20 +384,27 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
     swap=cfg['blend_slider']>0 and (bool(user_text) or cfg['auto_prompt'])
     clauses=[]
     if cfg['removal_priority'] and any(v=='Remove' for v in appearances.values()):
-        clauses.append('prioritize all removal requirements below over conflicting appearance requests; reconstruct clean natural skin instead of hiding marks with blur')
+        clauses.append('render a clean natural result throughout the masked area' if family=='zimage' else
+                       'prioritize all removal requirements below over conflicting appearance requests; reconstruct clean natural skin instead of hiding marks with blur')
     if swap:
-        clauses.append('head_swap: use Picture 1 as the target body and scene; replace its head with the facial identity, eye color and nose structure of Picture 2; preserve the pose, expression, outfit, lighting and background of Picture 1')
-        if target_location:
+        if family=='zimage':
+            clauses.append('inpaint only the masked head as the character defined by the loaded character LoRA; preserve the source pose, expression, hairstyle, hairline, head silhouette, body, outfit, lighting and background')
+            notes.append('Z-Image identity comes from the selected character LoRA; uploaded reference headshots are not used for conditioning.')
+        else:
+            clauses.append('head_swap: use Picture 1 as the target body and scene; replace its head with the facial identity, eye color and nose structure of Picture 2; preserve the pose, expression, outfit, lighting and background of Picture 1')
+        if target_location and family!='zimage':
             clauses.append(f'apply the identity change only to the head centered {target_location[0]:.0%} from the left and {target_location[1]:.0%} from the top of Picture 1; preserve all other people')
-        if not any('hairstyle' in v or 'hair' in v for v in extras): clauses.append('preserve the hairstyle, hair length, hairline and outer hair silhouette of Picture 1; use Picture 2 for facial identity only')
+        if family!='zimage' and not any('hairstyle' in v or 'hair' in v for v in extras): clauses.append('preserve the hairstyle, hair length, hairline and outer hair silhouette of Picture 1; use Picture 2 for facial identity only')
     if cfg['ratio_lock']:
-        clauses.append('keep the original head scale relative to the shoulders and body of Picture 1')
+        clauses.append('keep the original head scale relative to the shoulders and body of '+('the source image' if family=='zimage' else 'Picture 1'))
         if 'neck' in cfg['ratio_mode'].lower(): clauses.append('match the original neck thickness and shoulder junction')
         if 'Balanced' in cfg['ratio_mode']: clauses.append('allow a small natural change in hair volume')
-    if cfg['prevent_extra_head'] and swap: clauses.append('one replacement head; remove the original head completely')
+    if cfg['prevent_extra_head'] and swap:
+        clauses.append('one natural face with coherent eyes, nose, mouth, jaw and neck anatomy' if family=='zimage' else
+                       'one replacement head; remove the original head completely')
     for key,policy in appearances.items():
-        if policy=='Remove': clauses.append(BAN_POS[key])
-        elif policy=='Preserve': clauses.append(f'preserve allowed {key} from Picture 1 except items explicitly required to be removed')
+        if policy=='Remove': clauses.append(ZIMAGE_CLEAN_POS[key] if family=='zimage' else BAN_POS[key])
+        elif policy=='Preserve': clauses.append(f'preserve allowed {key} from {"the source image" if family=="zimage" else "Picture 1"} except items explicitly required to be removed')
     if cfg['match_sharpness']:
         clauses.append('match the original focal sharpness and local contrast; preserve fine skin pores, age texture, individual hair strands and fabric detail; avoid waxy or airbrushed skin')
     weight=1.0+cfg['blend_slider']/200.0
@@ -376,17 +414,22 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
     if cfg['blend_lora_boost'] and cfg['blend_slider']>50: strength*=1+(cfg['blend_slider']-50)/200
     if cfg['tiny_head_boost'] and head_px and head_px<220: strength*=1.08
     strength=min(2.0,strength)
-    tags=list(dict.fromkeys(extra_tags+[f'<lora:{fs_name}:{strength:.2f}>']))
+    tags=list(dict.fromkeys(extra_tags+([] if family=='zimage' else [f'<lora:{fs_name}:{strength:.2f}>'])))
     if char_name: tags.append(f'<lora:{char_name}:{cfg["char_lora_strength"]:.2f}>')
     trigger=str(cfg['char_lora_trigger'] or '').strip() if char_name else ''
     core=[user_text,block] if cfg['blend_order']=='User prompt first' else [block,user_text]
     positive=', '.join(x for x in [trigger,*core,*extras] if x)+' '+ ' '.join(tags)
     negative=str(negative or '')
     if cfg['neg_prompt_enable'] and cfg['neg_prompt_text']: negative=merge_negatives(negative,[cfg['neg_prompt_text'].strip()])
-    fast='Positive-only' in cfg['ban_channel']
-    guidance=1.0 if fast else max(1.1,float(host_cfg))
-    if fast and float(host_cfg)!=1: notes.append(f'Positive-only mode sets CFG {host_cfg:g} to 1.0')
-    if fast: notes.append('Negative prompts are inactive at CFG 1.0. Choose Positive + Negative to use your removal negatives.')
+    turbo=family=='zimage' and cfg['zimage_variant']=='Turbo'
+    fast=turbo or 'Positive-only' in cfg['ban_channel']
+    guidance=1.0 if fast else (float(host_cfg) if family=='zimage' else max(1.1,float(host_cfg)))
+    if turbo:
+        if float(host_cfg)!=1: notes.append(f'Z-Image Turbo requires CFG 1.0; changed Forge CFG {host_cfg:g} for this run.')
+        notes.append('Z-Image Turbo keeps Forge steps unchanged; negative prompts are inactive in Turbo mode.')
+    elif fast:
+        if float(host_cfg)!=1: notes.append(f'Positive-only mode sets CFG {host_cfg:g} to 1.0')
+        notes.append('Negative prompts are inactive at CFG 1.0. Choose Positive + Negative to use your removal negatives.')
     if not fast:
         terms=[t for k in APPEARANCE if appearances[k]=='Remove' for t in BAN_NEG[k]]
         if cfg['match_sharpness']: terms+=CATALOG['quality']
@@ -399,6 +442,12 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
         except Exception as e: notes.append(f'Token count unavailable: {e}')
     if count and count>512: notes.append(f'{count} Qwen3 tokens; all user text retained. Long prompts cost more memory.')
     return Plan(positive.strip(),negative,guidance,int(seed),round(strength,2),resolved,appearances,notes,count)
+
+def build_zimage_plan(user,negative,cfg,seed,all_choices,char_name,host_cfg=1.0,
+                      token_counter=None,owned_aliases=(),target_location=None):
+    """Build a character-LoRA inpainting prompt without reference-image claims."""
+    return build_plan(user,negative,cfg,seed,all_choices,'',char_name,host_cfg,None,
+                      token_counter,owned_aliases,target_location,family='zimage')
 
 def rgb_image(value,max_side=None):
     if isinstance(value,(tuple,list)): value=value[0] if value else None
@@ -667,7 +716,7 @@ def scale_pose(pose,from_size,to_size,offset=(0,0)):
     result['head_px']=max(result['head_w'],result['head_h']); result['head_ratio']=result['head_h']/to_size[1]
     return result
 
-def align_protected_head(image,baseline,target_pose,generated_pose):
+def align_protected_head(image,baseline,target_pose,generated_pose,preserve_aspect=False):
     """Align a generated crop; callers composite only the original protected mask."""
     tx0,ty0,tx1,ty1=target_pose['box']; gx0,gy0,gx1,gy1=generated_pose['box']
     tw,th=tx1-tx0,ty1-ty0; gw,gh=gx1-gx0,gy1-gy0
@@ -678,7 +727,7 @@ def align_protected_head(image,baseline,target_pose,generated_pose):
     # leaves the chin high (a long-neck result) or makes the face still wider.
     # For bounded aspect drift, restore the target face box on each axis and
     # pin the chin. Larger changes are rejected to avoid visible distortion.
-    if aspect_gap>1.14:
+    if aspect_gap>1.14 and not preserve_aspect:
         if not 0.75<=width_scale<=1.30 or not 0.75<=height_scale<=1.34:
             raise ValueError('Generated face proportions differ too much for safe alignment; choose another reference.')
         # Case 02035 requests 1.313x vertically. Cap at 1.30x rather than

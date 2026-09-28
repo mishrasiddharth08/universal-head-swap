@@ -85,6 +85,17 @@ class ExternalTests(unittest.TestCase):
             cfg['auto_model_adapter']=False
             with self.assertRaises(ValueError): runtime.resolve_adapters(cfg,NS(),'qwen')
 
+    def test_zimage_requires_character_lora_and_skips_bfs(self):
+        name='characters/alice'
+        entries={name:NS(metadata={'ss_base_model_version':'Tongyi-MAI/Z-Image-Turbo'},
+                         filename=name+'.safetensors',alias=name)}
+        cfg=core.normalize({'char_lora_name':name})
+        with patch('khs.runtime.registry',return_value=entries):
+            self.assertEqual(runtime.resolve_adapters(cfg,NS(),'zimage'),('',name))
+            cfg['char_lora_name']='None (skip)'
+            with self.assertRaisesRegex(ValueError,'requires a Z-Image character LoRA'):
+                runtime.resolve_adapters(cfg,NS(),'zimage')
+
     def test_protected_rgba_output_keeps_pixels_outside_mask(self):
         from PIL import ImageDraw
         s,p,host=self.session(1)

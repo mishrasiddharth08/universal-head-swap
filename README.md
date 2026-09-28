@@ -1,10 +1,14 @@
 # Universal Head Swap for Forge Neo
 
-**BFS head swapping in Forge's familiar workflow. One extension for FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 — the loaded checkpoint decides the mode.**
+**Head swapping in Forge: FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 use BFS + references; Z-Image uses character-LoRA inpainting. The loaded engine selects the route.**
 
 [Installation](#beginner-installation) · [Model files](#model-files) · [Step-by-step usage](#step-by-step-usage) · [UI tour](#ui-tour) · [Latest update](#latest-update) · [Testing status](#features-and-testing-status)
 
 ## Latest update
+
+- **Z-Image Turbo / Base:** native Forge inpainting, a matching character LoRA, protected head mask and the original output canvas. No BFS or reference-image encoding on this route.
+- **Optional SAM3:** local-only, CPU masking with a bounded cache; released before sampling. The fast face detector and custom masks need no SAM3 installation.
+- **Z-Image setup and limits:** [read the guide](docs/ZIMAGE.md).
 
 - **Fixed dedicated Qwen 2.1 routing:** Head Swap now supplies its references, prompts, BFS and character LoRAs to the Project Invisible engine.
 - **Automatic BFS selection:** follows preset/checkpoint changes and finds the preferred Qwen or Klein adapter in subfolders.
@@ -12,7 +16,7 @@
 - **Turbo and saving:** tested Qwen BFS + character + Viggle Turbo on INT8 ConvRot; the companion engine verifies saved files and reports their paths.
 - **Optional face-match checks:** bounded CPU checks appear in the generation report; review likeness visually too.
 
-**135 Head Swap tests passed.** The companion Qwen suite passed 132 tests. Real GPU testing used 13 headshots on an RTX 5090; other quantizations and a real Klein run remain unverified.
+Automated and live results are recorded in [VALIDATION.md](VALIDATION.md). Prior Qwen GPU testing used 13 headshots on an RTX 5090; it does not validate Z-Image, other quantizations or every GPU.
 
 **Qwen users must update both extensions and restart Forge.** An older Project Invisible Qwen engine bypasses Head Swap. See [the companion integration requirement](docs/QWEN21_INTEGRATION.md). Details: [change history](CHANGELOG.md).
 
@@ -20,13 +24,14 @@
 
 Use Forge's normal img2img tab, prompt, seed and **Generate** button.
 Special controls stay inside a compact, collapsed **Universal Head Swap** panel.
-The original picture is the body/scene reference; the selected headshot is the identity reference.
+The original picture provides the body and scene. Klein/Qwen use the selected headshot for identity. Z-Image gets identity from its character LoRA; uploaded headshots only support optional quality checks.
 This is an independent community extension, not an official product. Inspect every output at 100% zoom.
 
 ## Features and testing status
 
 - **FLUX.2 Klein 4B/9B:** inherited from the validated v6 codebase; reference latents, size-matched BFS adapters.
 - **Qwen 2.1:** dedicated Project Invisible bridge, target/reference ordering and protected editing verified with INT8 ConvRot, BFS, a character LoRA and Viggle Turbo. The older native Qwen route has separate reference handling.
+- **Z-Image:** native masked img2img with a character LoRA, bounded geometry correction and optional SAM3. Choose Turbo or Base to match your checkpoint; Turbo uses CFG 1.
 - **Organized controls:** four compact tabs, with headshots and LoRA selectors together in Swap.
 - **Memory:** device-aware probing (never assumes GPU 0), bounded reference budgets, one OOM retry, 256 MiB encode cache.
 - **Quantization:** all modern formats through Forge's own loaders; LoRAs stay on the runtime side path, never merged into quantized weights.
@@ -54,7 +59,7 @@ No promise is made for every VRAM size.
 | Component | Forge folder |
 |---|---|
 | FLUX.2 Klein 4B or 9B checkpoint, **or** Qwen Image Edit 2.1 checkpoint | `models/Stable-diffusion` |
-| Matching BFS face/head-swap LoRA for the loaded family | `models/Lora` |
+| Matching BFS LoRA for Klein/Qwen, or a character LoRA for Z-Image | `models/Lora` |
 | Optional character LoRA (same family as the checkpoint) | `models/Lora` |
 
 A Klein BFS LoRA is **not** interchangeable with Qwen — the extension enforces the family match and explains mismatches.
@@ -73,6 +78,8 @@ Inside the panel:
 - **Settings** — memory limits, saved setups and generation reports.
 
 Leave Auto enabled for matching BFS selection. Disable it to choose a head-swap LoRA manually. Choose the character LoRA separately in Swap.
+
+For Z-Image, choose a character LoRA in **Swap → Character LoRA**, open **Z-Image · character LoRA inpainting**, and keep **Head only**. [Full guide](docs/ZIMAGE.md).
 
 ## Step-by-step usage
 
@@ -131,6 +138,7 @@ Special thanks to:
 - [**Haoming02 / sd-webui-forge-classic (neo branch)**](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) — the Forge Neo tree this extension targets
 - [**Adeliox**](https://github.com/Adeliox) — original Klein Head Swap
 - [Alissonerdx](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap) — BFS (Best Face Swap) workflow and LoRAs
+- [PozzettiAndrea / ComfyUI-SAM3](https://github.com/PozzettiAndrea/ComfyUI-SAM3) and [Meta SAM3](https://github.com/facebookresearch/sam3) — segmentation workflow inspiration and optional upstream mask model
 - [**ComfyUI**](https://github.com/comfyanonymous/ComfyUI) — reference for upstream sampler/scheduler coverage
 - The Forge / AUTOMATIC1111 community — for the extension ecosystem this plugs into
 - Project Invisible extensions — memory policy, GPU compatibility and extension philosophy

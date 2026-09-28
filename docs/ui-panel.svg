@@ -30,7 +30,7 @@
 <text x="416" y="247" font-size="13" fill="#8b949e" font-weight="400">Qwen: prefers installed BFS v1.1 Alternative</text>
 <rect x="396" y="279" width="532" height="97" rx="10" fill="#161b22" stroke="#30363d"/>
 <text x="416" y="310" font-size="18" fill="#e6edf3" font-weight="700">Character LoRA · optional</text>
-<text x="416" y="339" font-size="14" fill="#e6edf3" font-weight="400">Choose separately; match the loaded model family.</text>
+<text x="416" y="339" font-size="14" fill="#e6edf3" font-weight="400">Required for Z-Image; optional for Klein / Qwen.</text>
 <text x="416" y="362" font-size="13" fill="#8b949e" font-weight="400">Strengths and trigger: expand LoRA controls.</text>
 <rect x="32" y="394" width="896" height="74" rx="10" fill="#161b22" stroke="#30363d"/>
 <text x="52" y="423" font-size="17" fill="#e6edf3" font-weight="700">Edit area: Head only / Whole image</text>
@@ -49,5 +49,5 @@
 <text x="656" y="568" font-size="13" fill="#8b949e" font-weight="400">Generation reports</text>
 <text x="32" y="630" font-size="16" fill="#58a6ff" font-weight="700">Qwen companion: keep model loaded + GPU offload controls</text>
 <text x="32" y="657" font-size="15" fill="#e6edf3" font-weight="400">Total progress counts all images and optional refinement steps.</text>
-<text x="32" y="691" font-size="13" fill="#8b949e" font-weight="400">353 CPU/UI checks passed across both extensions. Fresh GPU and image-quality validation pending.</text>
+<text x="32" y="691" font-size="13" fill="#8b949e" font-weight="400">Z-Image: choose a character LoRA + Head only. Optional SAM3 uses local weights; no downloads.</text>
 </svg>

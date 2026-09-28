@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Universal Head Swap — Forge Neo extension for FLUX.2 Klein &amp; Qwen Image Edit 2.1</title>
-<meta name="description" content="One extension, two models. BFS head swapping for FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 in Forge Neo — auto mode switching, protected head editing, memory-efficient on any GPU.">
+<title>Universal Head Swap — Klein, Qwen 2.1 and Z-Image for Forge Neo</title>
+<meta name="description" content="Head swapping for Klein, Qwen 2.1 and Z-Image in Forge Neo: automatic routing, protected masks and Forge-managed memory.">
 <style>
 :root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--purple:#bc8cff}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -47,7 +47,7 @@ a{color:var(--accent)}
 
 <header>
   <h1>Universal Head Swap</h1>
-  <p class="tagline">One extension. Two models. FLUX.2 Klein 4B/9B &amp; Qwen Image Edit 2.1 — auto-switched.</p>
+  <p class="tagline">One extension. Klein, Qwen 2.1 and Z-Image — automatic engine routing.</p>
   <div class="badges">
     <span class="badge"><b>v1.0</b></span>
     <span class="badge">Forge Neo (classic)</span>
@@ -62,27 +62,29 @@ a{color:var(--accent)}
 <main class="wrap">
 
 <section class="grid">
-  <div class="card"><div class="icon">🔁</div><h3>Auto model switching</h3><p>Select the checkpoint in Forge's dropdown — Klein or Qwen 2.1 — and the extension switches its reference plumbing, LoRA matching and prompt formatting automatically. No manual mode toggle.</p></div>
+  <div class="card"><div class="icon">🔁</div><h3>Auto model switching</h3><p>Select the checkpoint in Forge's dropdown — Klein, Qwen 2.1 or Z-Image — and the extension switches its reference plumbing, LoRA matching and prompt formatting automatically. For Z-Image, choose Turbo or Base to match the checkpoint.</p></div>
   <div class="card"><div class="icon">🎭</div><h3>BFS head swap</h3><p>Use the original picture as the body/scene reference and a selected headshot as the identity reference, powered by Alissonerdx's BFS (Best Face Swap) LoRAs.</p></div>
   <div class="card"><div class="icon">🛡️</div><h3>Protected head edit</h3><p>Dedicated sampling canvas for the head region, composited back into the untouched original. Optional custom mask, feathering and crop padding.</p></div>
   <div class="card"><div class="icon">🧼</div><h3>Whole-body cleanup</h3><p>Removal policies for tattoos, henna, body ink, piercings, earrings, jewelry, forehead marks and cross symbols — resolved in one deterministic prompt plan.</p></div>
   <div class="card"><div class="icon">🔍</div><h3>Proportions &amp; sharpness</h3><p>Preserve canvas aspect ratio, guide head/body scale, measured head-height correction, and detail-matched sharpening. Verify identity visually at 100% zoom.</p></div>
-  <div class="card"><div class="icon">📐</div><h3>Proportions &amp; sharpness</h3><p>Preserve canvas aspect ratio, guide head/body scale, measured head-height correction with isotropic transform, and detail-matched sharpening.</p></div>
-  <div class="card"><div class="icon">⚡</div><h3>Any VRAM, any quant</h3><p>Project-Invisible memory policy: device-aware probing (never assumes GPU 0), bounded reference budgets, OOM retry, RAM-backed encode cache, all modern quantization formats via Forge's own loaders.</p></div>
+  <div class="card"><div class="icon">🎭</div><h3>Z-Image inpainting</h3><p>Use a Z-Image character LoRA with native masked img2img. Turbo keeps CFG 1. Optional local SAM3 masks run on CPU and unload before sampling.</p></div>
+  <div class="card"><div class="icon">⚡</div><h3>Forge-managed memory</h3><p>Project-Invisible memory policy: device-aware probing (never assumes GPU 0), bounded reference budgets, OOM retry, RAM-backed encode cache, quantization support follows Forge's own loaders; every format has not been tested.</p></div>
   <div class="card"><div class="icon">🧩</div><h3>Zero core edits</h3><p>Hook-only Forge integration via a scoped, removable bridge. Delete the extension folder and Forge is 100% stock. Every hook forwards <code>*args/**kwargs</code>.</p></div>
 </section>
 
 <h2>How auto-switching works</h2>
 <table>
-  <tr><th></th><th>FLUX.2 Klein 4B / 9B</th><th>Qwen Image Edit 2.1</th></tr>
-  <tr><td>Detection</td><td><code>dynamic_args.klein</code> + hidden_size (3072→4B, 4096→9B)</td><td>Dedicated Project Invisible Qwen 2.1 bridge; native Qwen uses its engine state</td></tr>
-  <tr><td>Reference path</td><td>VAE latents in <code>model.ref_latents</code></td><td>Pixel-space start image + vision-token prompts</td></tr>
-  <tr><td>Prompt numbering</td><td>Picture 1 = target, Picture 2 = headshot</td><td>Auto-remapped (Picture 0 = target, prepended by Forge)</td></tr>
-  <tr><td>Adapters</td><td>Klein-family BFS LoRAs, size-matched</td><td>Qwen-family BFS + character LoRAs, family-locked</td></tr>
-  <tr><td>Latent sharpening</td><td>Supported</td><td>Skipped (pixel-space path)</td></tr>
+  <tr><th></th><th>FLUX.2 Klein 4B / 9B</th><th>Qwen Image Edit 2.1</th><th>Z-Image Turbo / Base</th></tr>
+  <tr><td>Detection</td><td><code>dynamic_args.klein</code> + hidden_size (3072→4B, 4096→9B)</td><td>Dedicated Project Invisible Qwen 2.1 bridge; native Qwen uses its engine state</td><td>Native ZImage engine/config</td></tr>
+  <tr><td>Reference path</td><td>VAE latents in <code>model.ref_latents</code></td><td>Pixel-space start image + vision-token prompts</td><td>Native masked img2img; no reference encodes</td></tr>
+  <tr><td>Prompt numbering</td><td>Picture 1 = target, Picture 2 = headshot</td><td>Auto-remapped (Picture 0 = target, prepended by Forge)</td><td>Character-LoRA prompt; no image numbering</td></tr>
+  <tr><td>Adapters</td><td>Klein-family BFS LoRAs, size-matched</td><td>Qwen-family BFS + character LoRAs, family-locked</td><td>Z-Image character LoRA required; BFS disabled</td></tr>
+  <tr><td>Latent sharpening</td><td>Supported</td><td>Skipped (pixel-space path)</td><td>Not applicable</td></tr>
 </table>
-<p class="note">Everything else — removal policies, protected editing, face audit, presets, fine-grid cleanup, quality gates — is identical in both modes.</p>
+<p class="note">Protected editing, quality checks and saved setups remain available. Z-Image uses masked character-LoRA inpainting; its Turbo mode has no negative guidance.</p>
 
+<h2>Z-Image setup</h2>
+<p>Load Z-Image and a matching character LoRA. In Swap, open <b>Z-Image · character LoRA inpainting</b>, choose Turbo or Base, and keep <b>Head only</b>. BFS is not used; headshots are optional quality references. <a href="docs/ZIMAGE.md">Setup and validation limits</a>.</p>
 <h2>How it works</h2>
 <img src="docs/workflow.svg" alt="5-step workflow: Load checkpoint, img2img target, 1-20 headshots, Check setup, Generate" style="width:100%;border:1px solid var(--border);border-radius:10px">
 <p class="note">Model auto-switch: pick the checkpoint in Forge's normal dropdown — the extension follows. No mode toggle exists.</p>
@@ -139,6 +141,7 @@ git clone https://github.com/mishrasiddharth08/universal-head-swap
     <li><a href="https://github.com/comfyanonymous/ComfyUI">ComfyUI</a> — reference for upstream sampler/scheduler coverage</li>
     <li>The Forge / AUTOMATIC1111 community — for the extension ecosystem this plugs into</li>
     <li>Project Invisible extensions — memory policy, GPU compatibility and extension philosophy</li>
+    <li><a href="https://github.com/PozzettiAndrea/ComfyUI-SAM3">PozzettiAndrea / ComfyUI-SAM3</a> and <a href="https://github.com/facebookresearch/sam3">Meta SAM3</a> — segmentation workflow inspiration and optional mask model</li>
     <li>ComfyUI-DeGrid — Apache-2.0 fine-grid cleanup filter</li>
     <li>Google MediaPipe — face landmarker and detector models</li>
     <li>And everyone else in the Stable Diffusion and Forge communities whose workflows, bug reports and discussions contributed.</li>
