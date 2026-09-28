@@ -191,3 +191,5 @@ Automatic Qwen selection now prefers `bfs_head_v1.1_alternative_qwen_2.1`, then 
 - [Author's Qwen 2.1 workflow](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/blob/main/workflows/Head%20Swap%20V1%20Qwen%202.1%20Workflow.json)
 
 The workflow uses standard BFS v1.1 at strength 1, target as image1 and head reference as image2. Its eight-step setup also uses a separate Pruna eight-step adapter and DEIS sampler. Installing BFS alone does not reproduce that speed setup; existing guidance/sampler settings are retained. Protected hair, removal choices, character LoRA and memory controls remain active. The alternative weights were checksum-verified, and 152 extension tests passed. Fresh visual quality and every quantization are not established by these tests.
+
+BFS v1.1 Alternative was also tested through the [Project Invisible Qwen 2.1 companion](https://github.com/mishrasiddharth08/Project-Invisible-Qwen2.1-extension) with a character LoKr. Update both extensions and restart Forge; see VALIDATION.md for measured speed, memory and limitations.
