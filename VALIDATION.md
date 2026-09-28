@@ -1,3 +1,9 @@
+## 28 September 2026 — proportions and layout
+
+- Added bounded width/height correction for short, wide generated faces, anchored to the source chin. Unsafe corrections still fail the alignment guard.
+- Organized the interface into Swap, Appearance, Quality & mask, and Settings tabs, with scoped alignment styling that keeps Forge colors. Advanced controls remain available.
+- 155 CPU/UI tests passed. Regression cases reproduce the measurements from outputs 02034 and 02035. Fresh generated-image quality remains unverified because Forge was unavailable.
+
 # Current rc5 validation — 21 September 2026
 
 **116 CPU tests passed**, zero failures/skips (2.668 seconds). Includes automatic grid detection, clean-image exact bypass, bounded correction, protected-mask preservation, operation before resizing/sharpening, preset/argument compatibility and real Gradio component construction with host stand-ins. No GPU or training work was performed for this change. UI tests require normal CPU detection; the restricted shell's Polars feature probe failed, and the unchanged dependency passed outside that shell.

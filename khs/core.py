@@ -673,23 +673,42 @@ def align_protected_head(image,baseline,target_pose,generated_pose):
     tw,th=tx1-tx0,ty1-ty0; gw,gh=gx1-gx0,gy1-gy0
     if min(tw,th,gw,gh)<8: raise ValueError('Face too small for reliable alignment.')
     height_scale=th/gh; width_scale=tw/gw
-    # One isotropic transform preserves identity. Balance width and height,
-    # while limiting height deviation to 10%, then pin the chin to the source.
-    scale=math.sqrt(height_scale*width_scale)
-    scale=max(height_scale*0.90,min(height_scale*1.10,scale))
+    aspect_gap=max(height_scale,width_scale)/min(height_scale,width_scale)
+    # A short, wide generated face cannot be repaired by one scale value: it
+    # leaves the chin high (a long-neck result) or makes the face still wider.
+    # For bounded aspect drift, restore the target face box on each axis and
+    # pin the chin. Larger changes are rejected to avoid visible distortion.
+    if aspect_gap>1.14:
+        if not 0.75<=width_scale<=1.30 or not 0.75<=height_scale<=1.34:
+            raise ValueError('Generated face proportions differ too much for safe alignment; choose another reference.')
+        # Case 02035 requests 1.313x vertically. Cap at 1.30x rather than
+        # rejecting it; this leaves about 1% residual height error without a
+        # larger identity-changing warp.
+        scale_x=max(0.80,min(1.25,width_scale))
+        scale_y=max(0.80,min(1.30,height_scale))
+        mode='protected crop proportion alignment'
+    else:
+        scale=math.sqrt(height_scale*width_scale)
+        scale=max(height_scale*0.90,min(height_scale*1.10,scale))
+        if not 0.5<=scale<=1.5:
+            raise ValueError('Generated head differs too much for safe alignment; choose another reference.')
+        scale_x=scale_y=scale
+        mode='protected crop isotropic alignment'
     tx,ty=(tx0+tx1)/2,ty1; gx,gy=(gx0+gx1)/2,gy1
-    if not 0.5<=scale<=1.5 or math.hypot(tx-gx,ty-gy)>th*0.5:
+    if math.hypot(tx-gx,ty-gy)>th*0.5:
         raise ValueError('Generated head differs too much for safe alignment; choose another reference.')
-    dx,dy=tx-scale*gx,ty-scale*gy
-    affine=(1/scale,0,-dx/scale,0,1/scale,-dy/scale)
+    dx,dy=tx-scale_x*gx,ty-scale_y*gy
+    affine=(1/scale_x,0,-dx/scale_x,0,1/scale_y,-dy/scale_y)
     moved=image.transform(image.size,Image.Transform.AFFINE,affine,resample=Image.Resampling.BICUBIC)
     valid=Image.new('L',image.size,255).transform(image.size,Image.Transform.AFFINE,affine,resample=Image.Resampling.NEAREST)
     box=(max(0,int(tx0)),max(0,int(ty0)),min(image.width,int(tx1)),min(image.height,int(ty1)))
     if not all(box[i+2]>box[i] for i in range(2)) or valid.crop(box).getextrema()[0]<255:
         raise ValueError('Aligned face would fall outside the generated crop.')
-    return Image.composite(moved,baseline,valid),{'scale_factor':round(scale,4),
-        'height_scale':round(height_scale,4),'width_scale':round(width_scale,4),
-        'translation_px':[round(dx,2),round(dy,2)],'anchor':'source chin','mode':'protected crop alignment'}
+    report={'scale_x':round(scale_x,4),'scale_y':round(scale_y,4),
+        'requested_scale_y':round(height_scale,4),'requested_scale_x':round(width_scale,4),
+        'translation_px':[round(dx,2),round(dy,2)],'anchor':'source chin','mode':mode}
+    if scale_x==scale_y: report['scale_factor']=round(scale_x,4)
+    return Image.composite(moved,baseline,valid),report
 
 def correct_head_scale(image,target_pose,generated_pose):
     """Correct measured face height/center isotropically, feathering the head region."""

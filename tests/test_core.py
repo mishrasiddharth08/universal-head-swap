@@ -226,6 +226,38 @@ class GeometryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             core.align_protected_head(generated,baseline,target,{'box':(0,0,199,199)})
 
+    def test_protected_alignment_restores_short_wide_face_and_chin(self):
+        from PIL import ImageDraw
+        baseline=Image.new('RGB',(320,320),'blue')
+        generated=Image.new('RGB',(320,320),'green')
+        # Mirrors the supplied failures: about 21% short and 9% wide.
+        target={'box':(100,70,210,231)}
+        source={'box':(95,104,214,231)}
+        ImageDraw.Draw(generated).rectangle(source['box'],fill='red')
+        corrected,report=core.align_protected_head(generated,baseline,target,source)
+        self.assertEqual(report['mode'],'protected crop proportion alignment')
+        self.assertAlmostEqual(report['scale_x'],110/119,places=3)
+        self.assertAlmostEqual(report['scale_y'],161/127,places=3)
+        self.assertEqual(report['anchor'],'source chin')
+        self.assertEqual(corrected.getpixel((155,75)),(255,0,0))
+        self.assertEqual(corrected.getpixel((0,0)),(0,0,255))
+
+    def test_protected_alignment_caps_second_supplied_failure_safely(self):
+        image=Image.new('RGB',(360,360),'green')
+        target={'box':(100,70,210,231)}
+        # 23.85% short, matching 02035 metadata: requested 1.313x.
+        source={'box':(97,108.4,215,231)}
+        _,report=core.align_protected_head(image,image,target,source)
+        self.assertAlmostEqual(report['requested_scale_y'],161/122.6,places=3)
+        self.assertEqual(report['scale_y'],1.3)
+        self.assertLess(abs(122.6*report['scale_y']/161-1),0.02)
+
+    def test_protected_alignment_refuses_extreme_aspect_warp(self):
+        image=Image.new('RGB',(320,320),'green')
+        target={'box':(100,70,210,231)}
+        with self.assertRaisesRegex(ValueError,'proportions differ too much'):
+            core.align_protected_head(image,image,target,{'box':(80,160,230,231)})
+
     def test_blank_editor_canvas_uses_detected_head(self):
         expected=core.build_region(self.im,self.pose)
         for canvas in (Image.new('RGB',(800,600),'black'),Image.new('RGBA',(800,600),(255,255,255,0))):

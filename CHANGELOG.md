@@ -1,5 +1,11 @@
 # Changelog
 
+## 28 September 2026 — proportions and layout
+
+- Added bounded width/height correction for short, wide generated faces, anchored to the source chin. Unsafe corrections still fail the alignment guard.
+- Organized the interface into Swap, Appearance, Quality & mask, and Settings tabs, with scoped alignment styling that keeps Forge colors. Advanced controls remain available.
+- 155 CPU/UI tests passed. Regression cases reproduce the measurements from outputs 02034 and 02035. Fresh generated-image quality remains unverified because Forge was unavailable.
+
 ## 2026-09-27 — Qwen head-swap repair
 
 - Preserve the trained BFS `head_swap:` trigger and target/reference order.

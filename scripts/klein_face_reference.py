@@ -126,13 +126,21 @@ class UniversalHeadSwap(scripts.Script):
             C[key]=gr.Textbox(label=label,value=str(defaults[key] or ''),**kw); return C[key]
         try: names=list(runtime.registry()) if HOST else []
         except Exception as e: names=[]; print(f'[UniversalHeadSwap] Adapter list unavailable: {e}')
-        with InputAccordion(False,label='Universal Head Swap') as C['enable']:
-            gr.Markdown('Add your target in **img2img**, add headshots here, then press **Generate**. Model matching is automatic.')
+        with InputAccordion(False,label='Universal Head Swap',elem_classes=['uhs-panel']) as C['enable']:
+            gr.HTML('''<style>
+.uhs-panel .tabs > .tab-nav {gap:.35rem; flex-wrap:wrap; border-bottom:1px solid var(--border-color-primary)}
+.uhs-panel .tabs > .tab-nav button {min-height:40px; padding:.5rem .85rem; font-weight:650}
+.uhs-panel .tabitem {padding-top:.65rem}
+.uhs-panel .gradio-row {gap:.65rem; align-items:flex-end}
+.uhs-panel button {border-radius:8px}
+.uhs-panel .prose p {margin:.25rem 0}
+</style>''')
+            gr.Markdown('Add the target in **img2img**, add headshots below, then press **Generate**. The matching BFS LoRA is selected automatically.')
             if BRIDGE_ERROR:
                 gr.Markdown('**Unavailable:** '+BRIDGE_ERROR); C['enable'].interactive=False
             if self.custom_error: gr.Markdown('**Custom preset warning:** '+self.custom_error)
             with gr.Tabs() as tabs:
-                with gr.Tab('Swap',id='setup'):
+                with gr.Tab('1 · Swap',id='setup'):
                     with gr.Row():
                         with gr.Column(scale=1):
                             C['headshots']=gr.Gallery(label='Headshots',columns=4,height=220,type='filepath',format='png',interactive=True,allow_preview=True)
@@ -169,7 +177,7 @@ class UniversalHeadSwap(scripts.Script):
                             check('auto_pick_best','Score references automatically')
                             check('rotate_top_only','Rotate only good matches')
                         check('seed_lock','Reuse the first seed for this target')
-                with gr.Tab('Appearance',id='look'):
+                with gr.Tab('2 · Appearance',id='look'):
                     gr.Markdown('**Cleanup preferences**')
                     gr.Markdown('**Body cleanup is outside the automatic head mask.** For body tattoos or jewelry, open Edit mask and paint those areas white, or select Whole image.')
                     labels={'bindi':'Forehead marks / sindoor','earrings':'Earrings','tattoos':'Tattoos / henna',
@@ -199,7 +207,7 @@ class UniversalHeadSwap(scripts.Script):
                         drop('neg_preset_dropdown','Negative preset',['None']+list(self.custom.get('negative_presets',{})))
                         check('neg_prompt_enable','Append additional negatives')
                         text('neg_prompt_text','Additional negative prompt',lines=3)
-                with gr.Tab('Quality & mask',id='detail'):
+                with gr.Tab('3 · Quality & mask',id='detail'):
                     check('qwen_detail_crop','Qwen: focus generation on the head for more detail')
                     with gr.Row():
                         check('geometry_match','Check original head size and position')
@@ -245,7 +253,7 @@ class UniversalHeadSwap(scripts.Script):
                             drop('latent_kernel_size','Latent sharpening kernel',['3x3','5x5','7x7','9x9','15x15'])
                         check('blend_lora_boost','Boost adapter above instruction strength 50')
                         check('tiny_head_boost','Small-head adapter boost')
-                with gr.Tab('Settings',id='settings'):
+                with gr.Tab('4 · Settings',id='settings'):
                     with gr.Accordion('Speed & memory',open=False):
                         with gr.Row():
                             drop('resolution_dropdown','Maximum reference side',['512','768','1024','1280','1536','2048'])
