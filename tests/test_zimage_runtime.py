@@ -121,6 +121,24 @@ class ZImageRuntimeTests(unittest.TestCase):
         with patch('khs.runtime.registry',return_value={'person-ZIT':entry}):
             self.assertEqual(runtime.resolve_adapters(cfg,None,'zimage'),('','person-ZIT'))
 
+    def test_base_character_lora_preserves_native_guidance(self):
+        args=self.fixtures()
+        model,host,p,owner,cfg,entries,custom=args
+        cfg['zimage_variant']='Base'
+        name='person-ZIB'
+        cfg['char_lora_name']=name
+        entry=next(iter(entries.values()))
+        entry.alias=name; entry.filename=name+'.safetensors'
+        entry.metadata={'ss_base_model_version':'Tongyi-MAI/Z-Image'}
+        entries.clear(); entries[name]=entry
+        session=self.session(*args)
+        try:
+            session.enter(); session.process()
+            self.assertEqual(p.cfg_scale,6.5)
+            self.assertIn('<lora:person-ZIB:',p.all_prompts[0])
+            self.assertEqual(session.encodes,0)
+        finally: session.close()
+
     def test_nonpositive_character_strength_fails_before_generation(self):
         model,host,p,owner,cfg,entries,_=self.fixtures()
         for strength in (0,-0.5):

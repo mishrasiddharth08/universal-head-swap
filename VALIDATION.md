@@ -1,3 +1,7 @@
+## Z-Image Base LoRA validation — 28 September 2026
+
+Base mode now preserves Forge CFG even in Positive-only mode. Turbo still uses CFG 1. Tested PlatinumEdition ZIB character LoRA at strength 0.7 with native Base BF16, CFG 4, 28 requested steps (19 effective): 240 matched layers, zero skipped; saved 1024x1280 output in 64.01 seconds including loading. Outside-mask pixels unchanged. Final measured face height/width deviations: 3.26%/1.95%; chin deviation 2.97 pixels. Identity likeness and exact neck preservation are not established by these measurements. 180 tests and 2 subtests passed.
+
 ## 28 September 2026 — Z-Image native head swap
 
 - Added native Z-Image Turbo/Base character-LoRA inpainting with optional local CPU SAM3 masks. Z-Image does not use BFS/reference conditioning.

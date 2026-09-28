@@ -423,10 +423,12 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
     if cfg['neg_prompt_enable'] and cfg['neg_prompt_text']: negative=merge_negatives(negative,[cfg['neg_prompt_text'].strip()])
     turbo=family=='zimage' and cfg['zimage_variant']=='Turbo'
     fast=turbo or 'Positive-only' in cfg['ban_channel']
-    guidance=1.0 if fast else (float(host_cfg) if family=='zimage' else max(1.1,float(host_cfg)))
+    guidance=float(host_cfg) if family=='zimage' and not turbo else (1.0 if fast else max(1.1,float(host_cfg)))
     if turbo:
         if float(host_cfg)!=1: notes.append(f'Z-Image Turbo requires CFG 1.0; changed Forge CFG {host_cfg:g} for this run.')
         notes.append('Z-Image Turbo keeps Forge steps unchanged; negative prompts are inactive in Turbo mode.')
+    elif fast and family=='zimage':
+        notes.append('Z-Image Base preserves Forge CFG; Positive-only mode leaves the negative prompt empty.')
     elif fast:
         if float(host_cfg)!=1: notes.append(f'Positive-only mode sets CFG {host_cfg:g} to 1.0')
         notes.append('Negative prompts are inactive at CFG 1.0. Choose Positive + Negative to use your removal negatives.')
