@@ -537,8 +537,11 @@ class Session:
             rng=np.random.default_rng(seed%(2**32)); arr=np.asarray(image,dtype=np.float32)
             image=Image.fromarray(np.clip(arr+rng.normal(0,cfg['grain_amount']*255,arr.shape[:2])[...,None],0,255).astype(np.uint8))
         if cfg.get('cleanup_mask') is not None:
-            from .cleanup import repair
-            image,quality['spot_cleanup']=repair(image,cfg['cleanup_mask'])
+            from .cleanup import repair,applies
+            if applies(cfg['cleanup_mask'],self.original):
+                image,quality['spot_cleanup']=repair(image,cfg['cleanup_mask'])
+            else:
+                quality['spot_cleanup']={'applied':False,'skipped':'cleanup mask was painted for a different target photo'}
         # Identity auditing also needs the final detected face when corrections are off.
         final_face=None
         if cfg['geometry_match'] or cfg['match_sharpness'] or cfg['identity_check']:

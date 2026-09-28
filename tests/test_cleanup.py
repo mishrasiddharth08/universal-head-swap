@@ -21,7 +21,8 @@ class CleanupTests(unittest.TestCase):
     def test_rejects_large_or_mismatched_mask(self):
         im=Image.new('RGB',(100,100))
         with self.assertRaisesRegex(ValueError,'3%'):repair(im,Image.new('L',im.size,255))
-        with self.assertRaisesRegex(ValueError,'dimensions'):repair(im,Image.new('L',(50,50),255))
+        with self.assertRaisesRegex(ValueError,'3%'):repair(im,Image.new('L',(50,50),255))
+        with self.assertRaisesRegex(ValueError,'dimensions'):painted_mask(Image.new('L',(50,50)),im.size)
     def test_empty_cleanup_is_exact_bypass(self):
         im=Image.new('RGB',(100,100))
         out,report=repair(im,None);self.assertIs(out,im);self.assertFalse(report['applied'])
@@ -38,5 +39,7 @@ class CleanupTests(unittest.TestCase):
         selected=select_candidates(editor,state,['1: tattoo'])
         self.assertEqual(painted_mask(selected,photo.size).getbbox(),mask.getbbox())
         validate_target(selected,photo)
-        with self.assertRaisesRegex(ValueError,'different target'):validate_target(selected,Image.new('RGB',photo.size,'black'))
+        # A mask painted for a different target photo is skipped, not fatal: folder
+        # batches must not abort because one target does not match the painted photo.
+        validate_target(selected,Image.new('RGB',photo.size,'black'))
         with self.assertRaisesRegex(ValueError,'changed'):select_candidates({'background':Image.new('RGB',photo.size)},state,['1: tattoo'])

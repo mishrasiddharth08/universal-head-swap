@@ -3,7 +3,17 @@ import numpy as np
 from PIL import Image
 
 
-def painted_mask(value,size):
+def applies(value,target):
+    """True when the painted cleanup belongs to this target photo (or no background hash is available)."""
+    if value is None: return False
+    if isinstance(value,dict) and value.get('background') is not None:
+        from .core import image_hash
+        try: return image_hash(editor_photo(value))==image_hash(target)
+        except Exception: return False
+    return True
+
+
+def painted_mask(value,size,strict=True):
     if value is None: return None
     if isinstance(value,dict):
         # Never treat the editor photo/background as a removal mask.
@@ -13,12 +23,16 @@ def painted_mask(value,size):
             if not isinstance(layer,Image.Image):
                 from .core import rgb_image
                 layer=rgb_image(layer)
-            if layer.size!=size: raise ValueError('Spot cleanup: paint on a photo with the same dimensions as the target.')
+            if layer.size!=size:
+                if strict: raise ValueError('Spot cleanup: paint on a photo with the same dimensions as the target.')
+                layer=layer.resize(size,Image.Resampling.NEAREST)
             rgba=np.asarray(layer.convert('RGBA'))
             selected=(rgba[...,:3].min(axis=2)>127)&(rgba[...,3]>127)
             mask=Image.fromarray(np.maximum(np.asarray(mask),selected.astype(np.uint8)*255))
     elif isinstance(value,Image.Image):
-        if value.size!=size: raise ValueError('Spot cleanup mask must match target dimensions.')
+        if value.size!=size:
+            if strict: raise ValueError('Spot cleanup mask must match target dimensions.')
+            value=value.resize(size,Image.Resampling.NEAREST)
         mask=value.convert('L')
     else:
         from .core import rgb_image
@@ -27,7 +41,7 @@ def painted_mask(value,size):
 
 
 def repair(image,value):
-    mask=painted_mask(value,image.size)
+    mask=painted_mask(value,image.size,strict=False)
     if mask is None: return image,{'applied':False}
     binary=(np.asarray(mask)>127).astype(np.uint8)*255
     count=int(np.count_nonzero(binary))
@@ -98,11 +112,13 @@ def select_candidates(value,state,selected):
 
 
 def validate_target(value,target):
-    mask=painted_mask(value,target.size)
-    if mask is None: return
-    if np.count_nonzero(np.asarray(mask)>127)>target.width*target.height*.03:
-        raise ValueError('Spot cleanup: paint only small marks or jewelry (maximum 3% of image).')
+    # In folder batches the mask belongs to one specific photo; skip silently for others
+    # instead of aborting the whole batch on a dimension mismatch.
     if isinstance(value,dict) and value.get('background') is not None:
         from .core import image_hash
         if image_hash(editor_photo(value))!=image_hash(target):
-            raise ValueError('Spot cleanup belongs to a different target photo. Clear it or paint this target again.')
+            return
+    mask=painted_mask(value,target.size,strict=False)
+    if mask is None: return
+    if np.count_nonzero(np.asarray(mask)>127)>target.width*target.height*.03:
+        raise ValueError('Spot cleanup: paint only small marks or jewelry (maximum 3% of image).')
