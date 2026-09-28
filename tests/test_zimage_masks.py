@@ -36,3 +36,22 @@ class ZImageMaskTests(unittest.TestCase):
                 cfg['custom_mask']=mask
                 original=region.mask
                 self.assertIs(zimage.protect_sam3_neck(region,pose,cfg).mask,original)
+
+    def test_native_overlay_disabled_only_for_own_zimage_pass(self):
+        from types import SimpleNamespace as NS
+        p=NS(); overlay=NS(overlay_image='original',mask_for_overlay='mask')
+        session=NS(p=p,family='zimage',region=object());p._khs_session=session
+        zimage.suppress_native_overlay(p,overlay)
+        self.assertIsNone(overlay.overlay_image)
+        self.assertIsNone(overlay.mask_for_overlay)
+        for family,inner,region in [('qwen',False,object()),('klein',False,object()),('zimage',True,object()),('zimage',False,None)]:
+            session.family=family;session.region=region;p._ad_inner=inner
+            overlay=NS(overlay_image='original',mask_for_overlay='mask')
+            zimage.suppress_native_overlay(p,overlay)
+            self.assertEqual(overlay.overlay_image,'original')
+
+    def test_single_blend_preserves_generated_boundary_contribution(self):
+        original=Image.new('RGB',(8,8),'black')
+        region=core.EditRegion(original,(0,0,8,8),Image.new('L',(8,8),128),original)
+        result=core.composite_region(Image.new('RGB',(8,8),'white'),region)
+        self.assertEqual(result.getpixel((4,4)),(128,128,128))

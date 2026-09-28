@@ -42,6 +42,8 @@ class SAM3Masker:
             if self.model is not None and hasattr(self.model, "eval"):
                 self.model.eval()
             return
+        from .sam3_setup import activate_runtime
+        activate_runtime()
         try:
             from sam3.model_builder import build_sam3_image_model
             from sam3.model.sam3_image_processor import Sam3Processor
@@ -138,6 +140,46 @@ class SAM3Masker:
                 self.error = str(exc)
                 self.release()
                 return None
+
+    def candidates(self, image, prompts, confidence=0.4, limit=24):
+        """Return bounded candidate masks; caller must obtain a user's selection."""
+        image=image.convert('RGB'); image.thumbnail((1024,1024),Image.Resampling.LANCZOS)
+        results=[]
+        with self.lock:
+            self.error=''
+            try:
+                self._load()
+                with self._inference_context():
+                    self.processor.set_confidence_threshold(float(confidence))
+                    state=self.processor.set_image(image)
+                    for prompt in list(dict.fromkeys(prompts))[:12]:
+                        if hasattr(self.processor,'reset_all_prompts'): self.processor.reset_all_prompts(state)
+                        output=self.processor.set_text_prompt(str(prompt),state)
+                        masks=self._cpu(output.get('masks',[]))
+                        if masks.ndim==4: masks=masks[:,0]
+                        scores=self._cpu(output.get('scores',[])).reshape(-1)
+                        for i,values in enumerate(masks):
+                            if i>=len(scores) or not np.isfinite(scores[i]) or scores[i]<confidence: continue
+                            finite=values[np.isfinite(values)]
+                            threshold=.5 if finite.size and finite.min()>=0 and finite.max()<=1 else 0
+                            mask=Image.fromarray((values>threshold).astype(np.uint8)*255).resize(image.size,Image.Resampling.NEAREST)
+                            if mask.getbbox() is None: continue
+                            # Suppress duplicate proposals returned by related category prompts.
+                            binary=np.asarray(mask)>0
+                            duplicate=False
+                            for prior in results:
+                                previous=np.asarray(prior['mask'])>0
+                                union=np.count_nonzero(binary|previous)
+                                if union and np.count_nonzero(binary&previous)/union>.8: duplicate=True;break
+                            if duplicate: continue
+                            results.append({'label':str(prompt),'score':float(scores[i]),'mask':mask})
+                            if len(results)>=limit: return results
+                return results
+            except Exception as exc:
+                self.error=str(exc)
+                raise RuntimeError('Automatic spot detection unavailable: '+self.error) from exc
+            finally:
+                self.release()
 
     def release(self, clear_cache=False):
         """Unload SAM3; cached masks remain CPU-only unless explicitly cleared."""

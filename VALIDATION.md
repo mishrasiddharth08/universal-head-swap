@@ -1,3 +1,11 @@
+## 28 September 2026 — single blending and reviewed spot cleanup
+
+- Z-Image skips Forge's duplicate final overlay; the extension blends the protected mask once.
+- Added optional CPU repair of explicitly painted small marks. Native live run removed the selected arm tattoo and navel studs; 1,322 painted body pixels changed and zero pixels changed outside the union of head/spot masks. Saved output verified. This is not a guarantee of perfect texture or identity.
+- Added optional CPU SAM3 detection proposals for tattoos, piercings, cross symbols and other religious symbols. Selection and mask review are required; no automatic removal. Real SAM3 inference remains unvalidated here because the optional model/runtime are not installed.
+- Added explicit one-time gated download/setup under Forge models/sam3, with isolated pinned runtime installation and no dependency upgrades. Existing weights are reused. Download/authentication logic tested with stubs; no access approval is accepted automatically.
+- 192 tests and 2 subtests passed. Broad masks and mismatched target photos fail before generation. Small-object detection is not exhaustive; large-area repair remains unsupported.
+
 ## Two-photo Turbo follow-up — 28 September 2026
 
 Tested OriginalLiteEdition ZIT on two additional poses, including sunglasses and an upward-tilted face. The user rejected initial visual quality, including a sample that passed geometric checks. Lower denoise and explicit pose descriptions improved accessory/expression preservation but do not establish identity or visual acceptance. Local tattoo/piercing cleanup produced visible patches and was not shipped as a feature. Cross-symbol removal remains untested.

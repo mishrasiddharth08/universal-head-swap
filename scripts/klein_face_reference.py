@@ -188,8 +188,43 @@ class UniversalHeadSwap(scripts.Script):
                             check('rotate_top_only','Rotate only good matches')
                         check('seed_lock','Reuse the first seed for this target')
                 with gr.Tab('2 · Appearance',id='look'):
+                    with gr.Accordion('Remove small marks / jewelry · paint spots',open=False):
+                        gr.Markdown('Upload the target photo, then paint **only** tattoo strokes, studs or small symbols white. CPU repair changes only painted pixels; no extra generation or VRAM. Clear the mask before switching photos. Large areas or marks crossing body edges need manual retouching.')
+                        C['cleanup_mask']=gr.ImageEditor(label='Paint spots to remove',type='pil',image_mode='RGBA',height=300,
+                            brush=gr.Brush(colors=['#ffffff'],color_mode='fixed'),format='png',sources=['upload','clipboard'],transforms=[])
+                        clear_spots=gr.Button('Clear painted cleanup')
+                        clear_spots.click(lambda:None,outputs=C['cleanup_mask'],queue=False)
+                        with gr.Accordion('Auto detect · optional SAM3',open=False):
+                            from khs.sam3_setup import model_directory,download_once
+                            from khs import cleanup
+                            spot_checkpoint=gr.Textbox(label='Local SAM3 checkpoint',value=str(model_directory()/'sam3.pt'))
+                            gr.Markdown('One-time download needs approved access to facebook/sam3 and a local Hugging Face login. Saved under Forge models/sam3; reused on later runs. Detection runs on CPU and unloads afterward. Small or unfamiliar symbols may be missed.')
+                            gr.Markdown('[Request official SAM3 access](https://huggingface.co/facebook/sam3). Use a read token below if this computer is not already logged in.')
+                            spot_token=gr.Textbox(label='Hugging Face read token (optional; not saved)',type='password')
+                            setup_spots=gr.Button('Download / set up SAM3 once')
+                            setup_status=gr.Textbox(label='SAM3 setup status',interactive=False)
+                            setup_spots.click(download_once,inputs=spot_token,outputs=[spot_checkpoint,setup_status])
+                            spot_types=gr.CheckboxGroup(choices=list(cleanup.DETECTION_PROMPTS),value=list(cleanup.DETECTION_PROMPTS),label='Detect these items')
+                            spot_extra=gr.Textbox(label='Additional visible symbol names (optional)',placeholder='Comma-separated object descriptions')
+                            spot_confidence=gr.Slider(.1,.9,value=.4,step=.05,label='Detection confidence')
+                            scan_spots=gr.Button('Detect candidates')
+                            spot_state=gr.State(None)
+                            spot_selection=gr.CheckboxGroup(choices=[],value=[],label='Select items to remove')
+                            spot_preview=gr.Image(label='Detection / removal preview',type='pil',interactive=False,height=250)
+                            def scan_cleanup(value,categories,checkpoint,confidence,extra):
+                                if HOST is not None and getattr(HOST.shared.state,'job',''):
+                                    raise gr.Error('Wait for the current generation to finish before detecting spots.')
+                                state,labels,preview=cleanup.detect(value,categories,checkpoint,confidence,extra)
+                                return state,gr.update(choices=labels,value=[]),preview
+                            scan_spots.click(scan_cleanup,inputs=[C['cleanup_mask'],spot_types,spot_checkpoint,spot_confidence,spot_extra],outputs=[spot_state,spot_selection,spot_preview])
+                            use_spots=gr.Button('Use selected items · review paint before Generate')
+                            use_spots.click(cleanup.select_candidates,inputs=[C['cleanup_mask'],spot_state,spot_selection],outputs=C['cleanup_mask'])
+                            preview_spots=gr.Button('Preview removal without generating')
+                            preview_spots.click(lambda value:cleanup.repair(cleanup.editor_photo(value),value)[0],inputs=C['cleanup_mask'],outputs=spot_preview)
+
+
                     gr.Markdown('**Cleanup preferences**')
-                    gr.Markdown('**Body cleanup is outside the automatic head mask.** For body tattoos or jewelry, open Edit mask and paint those areas white, or select Whole image.')
+                    gr.Markdown('**Body cleanup is outside the automatic head mask.** Use the spot-removal control above for small body marks or jewelry. Large-area generative cleanup requires a separately reviewed mask.')
                     labels={'bindi':'Forehead marks / sindoor','earrings':'Earrings','tattoos':'Tattoos / henna',
                             'piercings':'Body piercings','cross':'Cross symbols','jewelry':'Other jewelry'}
                     for row in (('tattoos','piercings','bindi'),('earrings','jewelry','cross')):
@@ -476,6 +511,9 @@ class UniversalHeadSwap(scripts.Script):
         if s is None or s.p is not p or getattr(p,'_ad_inner',False): return
         try: s.batch(int(kwargs.get('batch_number',getattr(p,'iteration',0))))
         except Exception as e: s.fail(e)
+    def postprocess_maskoverlay(self,p,ppmo,*args):
+        from khs.zimage import suppress_native_overlay
+        suppress_native_overlay(p,ppmo)
     def postprocess_image_after_composite(self,p,pp,*args):
         s=getattr(p,'_khs_session',None)
         if s is None or s.p is not p or getattr(p,'_ad_inner',False): return

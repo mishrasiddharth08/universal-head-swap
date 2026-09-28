@@ -1,3 +1,11 @@
+## 28 September 2026 — single blending and reviewed spot cleanup
+
+- Z-Image skips Forge's duplicate final overlay; the extension blends the protected mask once.
+- Added optional CPU repair of explicitly painted small marks. Native live run removed the selected arm tattoo and navel studs; 1,322 painted body pixels changed and zero pixels changed outside the union of head/spot masks. Saved output verified. This is not a guarantee of perfect texture or identity.
+- Added optional CPU SAM3 detection proposals for tattoos, piercings, cross symbols and other religious symbols. Selection and mask review are required; no automatic removal. Real SAM3 inference remains unvalidated here because the optional model/runtime are not installed.
+- Added explicit one-time gated download/setup under Forge models/sam3, with isolated pinned runtime installation and no dependency upgrades. Existing weights are reused. Download/authentication logic tested with stubs; no access approval is accepted automatically.
+- 192 tests and 2 subtests passed. Broad masks and mismatched target photos fail before generation. Small-object detection is not exhaustive; large-area repair remains unsupported.
+
 ## Z-Image Base LoRA validation — 28 September 2026
 
 Base mode now preserves Forge CFG even in Positive-only mode. Turbo still uses CFG 1. Tested PlatinumEdition ZIB character LoRA at strength 0.7 with native Base BF16, CFG 4, 28 requested steps (19 effective): 240 matched layers, zero skipped; saved 1024x1280 output in 64.01 seconds including loading. Outside-mask pixels unchanged. Final measured face height/width deviations: 3.26%/1.95%; chin deviation 2.97 pixels. Identity likeness and exact neck preservation are not established by these measurements. 180 tests and 2 subtests passed.

@@ -135,3 +135,13 @@ def prepare_batch(session,index):
         'crop_box':session.region.box,'encoded_sizes':[], 'vae_encodes':0,
         'sampling_size':list(session.canvas_size),'status':'Generating'}
     h.shared.state.textinfo='Z-Image: character LoRA + protected head inpainting'
+
+
+def suppress_native_overlay(p, overlay):
+    """The extension applies the final mask once, after restoring the original canvas."""
+    session=getattr(p,'_khs_session',None)
+    if (session is None or session.p is not p or session.family!='zimage'
+            or session.region is None or getattr(p,'_ad_inner',False)):
+        return
+    overlay.overlay_image=None
+    overlay.mask_for_overlay=None

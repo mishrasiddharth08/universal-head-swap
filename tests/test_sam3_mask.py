@@ -93,5 +93,13 @@ class SAM3MaskTests(unittest.TestCase):
         self.assertIsNone(masker.model)
 
 
+    def test_candidates_return_all_objects_filter_scores_and_release(self):
+        masker=SAM3Masker(None,loader=lambda:(NS(),FakeProcessor()),device='cpu')
+        found=masker.candidates(Image.new('RGB',(8,8)),['tattoo','cross'],confidence=.5)
+        self.assertEqual(len(found),2)  # Duplicate masks from the second prompt are merged.
+        self.assertIsNone(masker.processor)
+        masker=SAM3Masker(None,loader=lambda:(NS(),FakeProcessor()),device='cpu')
+        self.assertEqual(len(masker.candidates(Image.new('RGB',(8,8)),['tattoo'],confidence=.8)),1)
+
 if __name__ == "__main__":
     unittest.main()

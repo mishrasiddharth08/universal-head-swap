@@ -190,6 +190,9 @@ class Session:
         self.canvas_box=None; self.canvas_size=None; self.quality_history=[]
         self.selected_ref=None
         self.original=core.rgb_image(p.init_images[0])
+        if cfg.get('cleanup_mask') is not None:
+            from .cleanup import validate_target
+            validate_target(cfg['cleanup_mask'],self.original)
         self.refs,self.labels=([],[]) if self.family=='zimage' and not cfg['headshots'] else core.gallery_images(cfg['headshots'])
         self.fs,self.char=resolve_adapters(cfg,self.model,self.family)
         entries=registry(); self.owned_aliases=[getattr(entries[n],'alias','') for n in (self.fs,self.char) if n in entries]
@@ -533,6 +536,9 @@ class Session:
             seed=self.plans[min(index,len(self.plans)-1)].seed
             rng=np.random.default_rng(seed%(2**32)); arr=np.asarray(image,dtype=np.float32)
             image=Image.fromarray(np.clip(arr+rng.normal(0,cfg['grain_amount']*255,arr.shape[:2])[...,None],0,255).astype(np.uint8))
+        if cfg.get('cleanup_mask') is not None:
+            from .cleanup import repair
+            image,quality['spot_cleanup']=repair(image,cfg['cleanup_mask'])
         # Identity auditing also needs the final detected face when corrections are off.
         final_face=None
         if cfg['geometry_match'] or cfg['match_sharpness'] or cfg['identity_check']:

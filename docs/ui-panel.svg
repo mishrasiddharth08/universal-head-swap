@@ -38,7 +38,7 @@
 <rect x="32" y="488" width="288" height="107" rx="10" fill="#161b22" stroke="#30363d"/>
 <text x="48" y="516" font-size="17" fill="#e6edf3" font-weight="700">Appearance</text>
 <text x="48" y="544" font-size="13" fill="#8b949e" font-weight="400">Cleanup, hair and expression</text>
-<text x="48" y="568" font-size="13" fill="#8b949e" font-weight="400">Body cleanup needs a body mask.</text>
+<text x="48" y="568" font-size="13" fill="#8b949e" font-weight="400">Spot cleanup: detect, review, remove.</text>
 <rect x="336" y="488" width="288" height="107" rx="10" fill="#161b22" stroke="#30363d"/>
 <text x="352" y="516" font-size="17" fill="#e6edf3" font-weight="700">Quality &amp; mask</text>
 <text x="352" y="544" font-size="13" fill="#8b949e" font-weight="400">Bounded head-size / chin alignment</text>
@@ -49,5 +49,5 @@
 <text x="656" y="568" font-size="13" fill="#8b949e" font-weight="400">Generation reports</text>
 <text x="32" y="630" font-size="16" fill="#58a6ff" font-weight="700">Qwen companion: keep model loaded + GPU offload controls</text>
 <text x="32" y="657" font-size="15" fill="#e6edf3" font-weight="400">Total progress counts all images and optional refinement steps.</text>
-<text x="32" y="691" font-size="13" fill="#8b949e" font-weight="400">Z-Image: choose a character LoRA + Head only. Optional SAM3 uses local weights; no downloads.</text>
+<text x="32" y="691" font-size="13" fill="#8b949e" font-weight="400">Z-Image: choose a character LoRA + Head only. Optional SAM3: one-time setup, reused locally.</text>
 </svg>

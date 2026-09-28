@@ -35,7 +35,7 @@ NEW_KEYS = ['edit_scope','target_face','crop_padding','mask_feather','custom_mas
             'reference_budget','tiny_head_boost','strict_adapter','color_match','cache_encodes','ban_jewelry',
             'removal_priority','match_sharpness','geometry_match','quality_strict','keep_original_canvas',
             'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength','auto_model_adapter','qwen_detail_crop',
-            'zimage_variant','zimage_denoise','zimage_mask_source','sam3_checkpoint']
+            'zimage_variant','zimage_denoise','zimage_mask_source','sam3_checkpoint','cleanup_mask']
 ARG_KEYS = LEGACY_KEYS + NEW_KEYS
 APPEARANCE = ('bindi','earrings','tattoos','piercings','cross','jewelry')
 POLICIES = ['Preserve', 'Remove', 'Use prompt / preset']
@@ -54,10 +54,10 @@ DEFAULTS.update(qwen_detail_crop=True,auto_model_adapter=True,enable=False,heads
     tiny_head_boost=False,strict_adapter=True,color_match=0.35,cache_encodes=True,removal_priority=True,
     match_sharpness=True,geometry_match=True,quality_strict=False,keep_original_canvas=True,
     identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5,
-    zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='Face detector (fast)',sam3_checkpoint='')
+    zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='Face detector (fast)',sam3_checkpoint='',cleanup_mask=None)
 DEFAULTS.update({k:[] for k in CATEGORIES})
 DEFAULTS.update({'ban_'+k:'Remove' for k in APPEARANCE})
-EXCLUDE_SAVE = {'enable','headshots','custom_mask','preset_dropdown','preset_save_name','preset_save_btn',
+EXCLUDE_SAVE = {'cleanup_mask','enable','headshots','custom_mask','preset_dropdown','preset_save_name','preset_save_btn',
                 'preset_delete_btn','blend_preview','ratio_status','pos_status'}
 DEPRECATED = {'block_tattoos','block_crosses','block_sindoor_bindi','block_piercings','perfect_ratio',
               'neg_cfg_boost','force_klein','dominant_pos'}

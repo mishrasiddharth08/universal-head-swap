@@ -12,13 +12,17 @@ Turbo uses Forge CFG 1, so negative guidance is inactive. Forge retains your sam
 
 The face detector provides the default mask. A white-on-black custom mask takes priority. Crops are fitted without stretching, sampled with Forge's native inpainting mask, then blended into the original-size picture. Existing geometry checks, detail controls, cleanup prompts and output reports remain available. Full-image mode and no-reference diagnostic mode are rejected for this route to avoid unintended whole-scene edits. Reference-only latent sharpening has no effect on Z-Image.
 
-## Optional SAM3
+## Spot cleanup and optional SAM3
 
-SAM3 is not required. If its official Python package and checkpoint are already installed, choose **SAM3 (optional)** and enter the full local checkpoint path. No package or model is downloaded automatically. Use a trusted upstream checkpoint.
+In **Appearance → Remove small marks / jewelry**, upload the same target photo and paint small tattoo strokes, studs or symbols white. CPU spot repair modifies only painted pixels. Clear the editor before changing targets. Broad masks above 3% of the image are rejected; large tattoos and objects crossing silhouettes need manual retouching.
 
-This integration calls Meta's image processor directly, not ComfyUI nodes. Segmentation runs on CPU, uses a maximum 1024-pixel input side, caches at most 8 MiB of CPU masks, and releases the segmentation model before diffusion. It selects the detection overlapping the chosen face and restricts automatic masks to that head region. Missing dependencies, missing weights or failed selection stop with a clear message; select the fast detector or supply a custom mask instead.
+For automatic proposals, expand **Auto detect → Download / set up SAM3 once**. The official gated model requires approved Hugging Face access. Use an existing local login or the optional read-token field; the extension does not save that token or accept licenses for you.
 
-SAM3 text-mask quality is not guaranteed. [ComfyUI-SAM3 issue #98](https://github.com/PozzettiAndrea/ComfyUI-SAM3/issues/98) reports a text-segmentation regression. Preview every automatic mask. Real SAM3 model execution has not been validated in this Forge environment.
+The checkpoint is saved to **Forge/models/sam3/sam3.pt** and reused. Optional official SAM3 source is pinned and installed without dependencies into **Forge/models/sam3/runtime**; Forge packages are not upgraded. Generation never triggers downloads. Missing runtime dependencies produce an error rather than silently altering Forge.
+
+Choose Tattoos, Body piercings, Cross symbols, or Other religious symbols. Add specific visible object names when useful. Click **Detect candidates**, review numbered boxes, select items, then **Use selected items**. Nothing is selected automatically. Correct the paint and use **Preview removal** before Generate. Detection is not exhaustive; it can miss or mislabel objects. These are object proposals, not an inference about anyone's religion.
+
+Detection runs on CPU at a maximum 1024-pixel side and returns at most 24 proposals. SAM3 unloads after scanning. The default head mask still uses the face detector. For optional SAM3 head masking, choose SAM3 under Swap and enter the checkpoint path above. Real SAM3 detection remains unvalidated on this host until setup completes.
 
 ## Memory and compatibility
 
