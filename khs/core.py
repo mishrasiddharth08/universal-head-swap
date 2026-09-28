@@ -35,7 +35,7 @@ NEW_KEYS = ['edit_scope','target_face','crop_padding','mask_feather','custom_mas
             'reference_budget','tiny_head_boost','strict_adapter','color_match','cache_encodes','ban_jewelry',
             'removal_priority','match_sharpness','geometry_match','quality_strict','keep_original_canvas',
             'identity_check','identity_threshold','geometry_correct','moire_enabled','moire_strength','auto_model_adapter','qwen_detail_crop',
-            'zimage_variant','zimage_denoise','zimage_mask_source','sam3_checkpoint','cleanup_mask']
+            'zimage_variant','zimage_denoise','zimage_mask_source','sam3_checkpoint','sam3_device','sam3_quantization','cleanup_mask']
 ARG_KEYS = LEGACY_KEYS + NEW_KEYS
 APPEARANCE = ('bindi','earrings','tattoos','piercings','cross','jewelry')
 POLICIES = ['Preserve', 'Remove', 'Use prompt / preset']
@@ -54,7 +54,8 @@ DEFAULTS.update(qwen_detail_crop=True,auto_model_adapter=True,enable=False,heads
     tiny_head_boost=False,strict_adapter=True,color_match=0.35,cache_encodes=True,removal_priority=True,
     match_sharpness=True,geometry_match=True,quality_strict=False,keep_original_canvas=True,
     identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5,
-    zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='Face detector (fast)',sam3_checkpoint='',cleanup_mask=None)
+    zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='Face detector (fast)',sam3_checkpoint='',
+    sam3_device='Face detector CPU (recommended)',sam3_quantization='Full precision (fp32)',cleanup_mask=None)
 DEFAULTS.update({k:[] for k in CATEGORIES})
 DEFAULTS.update({'ban_'+k:'Remove' for k in APPEARANCE})
 EXCLUDE_SAVE = {'cleanup_mask','enable','headshots','custom_mask','preset_dropdown','preset_save_name','preset_save_btn',
@@ -117,6 +118,10 @@ def normalize(values=None):
     if cfg['zimage_variant'] not in ('Turbo','Base'): cfg['zimage_variant']='Turbo'
     if cfg['zimage_mask_source'] not in ('Face detector (fast)','SAM3 (optional)'):
         cfg['zimage_mask_source']='Face detector (fast)'
+    if cfg['sam3_device'] not in ('Face detector CPU (recommended)','GPU (CUDA)'):
+        cfg['sam3_device']='Face detector CPU (recommended)'
+    if cfg['sam3_quantization'] not in ('Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'):
+        cfg['sam3_quantization']='Full precision (fp32)'
     for k in CATEGORIES:
         cfg[k]=[str(x) for x in cfg[k]] if isinstance(cfg[k],(tuple,list)) else ([str(cfg[k])] if cfg[k] else [])
     return cfg

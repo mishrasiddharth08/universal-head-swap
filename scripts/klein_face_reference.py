@@ -163,7 +163,10 @@ class UniversalHeadSwap(scripts.Script):
                             slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05)
                         drop('zimage_mask_source','Z-Image mask',['Face detector (fast)','SAM3 (optional)'])
                         text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Optional: full path to an installed SAM3 checkpoint')
-                        gr.Markdown('A custom white-on-black mask takes priority. SAM3 needs its separately installed package and weights; it runs on CPU and is released before sampling. Nothing downloads automatically.')
+                        with gr.Row():
+                            drop('sam3_device','SAM3 device',['Face detector CPU (recommended)','GPU (CUDA)'])
+                            drop('sam3_quantization','SAM3 precision',['Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'])
+                        gr.Markdown('A custom white-on-black mask takes priority. SAM3 needs its separately installed package and weights; it runs on CPU and is released before sampling. Dynamic INT8 runs on CPU only and needs torchao. Nothing downloads automatically.')
                     C['edit_scope']=gr.Radio(choices=[('Head only · keep scene','Protected head edit'),('Whole image · restyle','Full image edit')],value=defaults['edit_scope'],label='Edit area')
                     with gr.Row():
                         identity_setup=gr.Button('Identity only · clear style changes',variant='primary')
@@ -413,10 +416,12 @@ class UniversalHeadSwap(scripts.Script):
                 analyze.click(preview_and_open,inputs=required+all_inputs,outputs=[C['blend_preview'],C['ratio_status'],preview_image,preview_ref,analysis_json,preview_section])
                 def make_mask(image,face,padding):
                     try:
+                        if image is None: raise gr.Error('Load the target photo in the img2img image box first, then create the mask.')
                         im=core.rgb_image(image); faces=self.analyzer.faces(im); idx=int(face)-1
                         if idx>=len(faces): raise ValueError('Selected face not detected. Upload a custom mask instead.')
                         mask=core.build_region(im,faces[idx],float(padding),0).mask.convert('RGB')
                         return {'background':mask,'layers':[],'composite':mask}
+                    except gr.Error: raise
                     except Exception as e: raise gr.Error(str(e))
                 mask_button.click(make_mask,inputs=[required[0],C['target_face'],C['crop_padding']],outputs=C['custom_mask'])
             else:

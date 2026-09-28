@@ -14,12 +14,18 @@ from PIL import Image
 from .core import BoundedCache, image_hash
 
 
+QUANTIZATIONS = ('Full precision (fp32)', 'Half (fp16)', 'BFloat16', 'FP8 E4M3 (GPU)',
+                 'FP8 E5M2 (GPU)', 'Dynamic INT8 (CPU only)', 'INT8 weight-only',
+                 'INT4 weight-only')
+
+
 class SAM3Masker:
     def __init__(self, checkpoint, bpe_path=None, device="cuda", cache_bytes=8 * 1024**2,
-                 loader=None):
+                 loader=None, quantization='Full precision (fp32)'):
         self.checkpoint = Path(checkpoint) if checkpoint else None
         self.bpe_path = Path(bpe_path) if bpe_path else None
         self.device = device
+        self.quantization = quantization if quantization in QUANTIZATIONS else 'Full precision (fp32)'
         self.loader = loader
         self.processor = None
         self.model = None
@@ -49,16 +55,84 @@ class SAM3Masker:
             from sam3.model.sam3_image_processor import Sam3Processor
         except ImportError as exc:
             raise RuntimeError("SAM3 is not installed in this Forge environment.") from exc
+        device = self.device
+        quant = self.quantization
+        if quant in ('Dynamic INT8 (CPU only)', 'INT8 weight-only', 'INT4 weight-only') and not str(device).startswith('cpu'):
+            device = 'cpu'  # torchao weight quantization runs on CPU here
         kwargs = dict(checkpoint_path=str(self.checkpoint), load_from_HF=False,
-                      device=self.device, compile=False)
+                      device=device, compile=False)
         if self.bpe_path:
             if not self.bpe_path.is_file():
                 raise RuntimeError("SAM3 tokenizer file is missing.")
             kwargs["bpe_path"] = str(self.bpe_path)
         self.model = build_sam3_image_model(**kwargs)
+        self._apply_quantization(quant, device)
         if hasattr(self.model, "eval"):
             self.model.eval()
-        self.processor = Sam3Processor(self.model, device=self.device)
+        self.processor = Sam3Processor(self.model, device=device)
+
+    def _apply_quantization(self, quantization, device):
+        """Cast or quantize the loaded model in place. fp32 is the untouched baseline."""
+        if quantization in (None, '', 'Full precision (fp32)'):
+            return
+        import torch
+        try:
+            if quantization == 'Half (fp16)':
+                if not str(device).startswith('cuda'):
+                    raise RuntimeError('FP16 inference is GPU-only; use BFloat16 or fp32 on CPU.')
+                self.model.to(torch.float16)
+            elif quantization == 'BFloat16':
+                if str(device).startswith('cuda'):
+                    if not torch.cuda.is_bf16_supported():
+                        raise RuntimeError('This GPU has no BFloat16 support; use FP16 or fp32.')
+                    self.model.to(torch.bfloat16)
+                else:
+                    self.model.to(torch.bfloat16)  # CPU bf16 is supported on modern PyTorch
+            elif quantization in ('FP8 E4M3 (GPU)', 'FP8 E5M2 (GPU)'):
+                if not str(device).startswith('cuda'):
+                    raise RuntimeError(quantization + ' needs a CUDA GPU; use BFloat16 or Dynamic INT8 on CPU.')
+                from torchao.float8 import convert_to_float8_training  # noqa: F401  # availability probe
+                del convert_to_float8_training
+                try:
+                    from torchao.quantization import quantize_, float8_dynamic_activation_float8_weight_quant
+                    quantize_(self.model, float8_dynamic_activation_float8_weight_quant())
+                except ImportError:
+                    try:
+                        from torchao.quantization import quantize_, float8_dynamic_activation_float8_weight
+                        quantize_(self.model, float8_dynamic_activation_float8_weight())
+                    except ImportError as exc:
+                        raise RuntimeError('FP8 needs torchao with float8 support: ' + str(exc)) from exc
+            elif quantization == 'Dynamic INT8 (CPU only)':
+                try:
+                    from torchao.quantization import quantize_, int8_dynamic_activation_int8_weight_quant
+                except ImportError:
+                    try:
+                        from torchao.quantization import quantize_, int8_dynamic_activation_int8_weight
+                        quantize_(self.model, int8_dynamic_activation_int8_weight())
+                        return
+                    except ImportError as exc:
+                        raise RuntimeError('Dynamic INT8 needs the torchao package on CPU: ' + str(exc)) from exc
+                quantize_(self.model, int8_dynamic_activation_int8_weight_quant())
+            elif quantization == 'INT8 weight-only':
+                from torchao.quantization import quantize_
+                try:
+                    from torchao.quantization import int8_weight_only_quant
+                    quantize_(self.model, int8_weight_only_quant())
+                except ImportError:
+                    from torchao.quantization import int8_weight_only
+                    quantize_(self.model, int8_weight_only())
+            elif quantization == 'INT4 weight-only':
+                from torchao.quantization import quantize_
+                try:
+                    from torchao.quantization import int4_weight_only_quant
+                    quantize_(self.model, int4_weight_only_quant())
+                except ImportError:
+                    from torchao.quantization import int4_weight_only
+                    quantize_(self.model, int4_weight_only())
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError('SAM3 quantization (' + quantization + ') failed: ' + str(exc)) from exc
 
     @staticmethod
     def _inference_context():

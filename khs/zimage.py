@@ -44,17 +44,24 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
     if cfg.get('zimage_mask_source') != 'SAM3 (optional)':
         return None
     if not pose:
-        raise ValueError('SAM3 head selection needs a detected face. Upload a custom mask instead.')
+        # No detected face: without a mask source there is nothing to segment, so
+        # fall back to the face-detector path instead of aborting folder batches.
+        print('[UniversalHeadSwap] SAM3 head selection needs a detected face; using the face detector mask for this target.')
+        return None
     checkpoint = Path(str(cfg.get('sam3_checkpoint') or '')).expanduser()
     if not checkpoint.is_file():
-        raise ValueError('Select an existing local SAM3 checkpoint, or use Face detector (fast). No files are downloaded.')
+        # SAM3 not installed/configured: keep the batch alive with the face-detector mask.
+        print('[UniversalHeadSwap] SAM3 checkpoint is not set up; using the face detector mask. Select an existing local SAM3 checkpoint for SAM3 masking.')
+        return None
     from .sam3_mask import SAM3Masker
     stat = checkpoint.stat()
-    key = (str(checkpoint.resolve()), stat.st_size, stat.st_mtime_ns)
+    device = 'cuda' if cfg.get('sam3_device') == 'GPU (CUDA)' else 'cpu'
+    quant = cfg.get('sam3_quantization') or 'Full precision (fp32)'
+    key = (str(checkpoint.resolve()), stat.st_size, stat.st_mtime_ns, device, quant)
     with _MASK_LOCK:
         if key != _MASKER_KEY:
             clear_mask_cache()
-            _MASKER = SAM3Masker(checkpoint, device='cpu')
+            _MASKER = SAM3Masker(checkpoint, device=device, quantization=quant)
             _MASKER_KEY = key
         sample = image.copy()
         sample.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
@@ -62,7 +69,9 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
         try:
             mask = _MASKER.mask(sample, prompt='head', face_box=face)
             if mask is None or mask.getbbox() is None:
-                raise ValueError('SAM3 found no reliable head mask: ' + (_MASKER.error or 'no matching head') + '. Use Face detector (fast) or a custom mask.')
+                # Missing mask on one photo must not kill a folder batch; fall back to the detector mask.
+                print('[UniversalHeadSwap] SAM3 found no reliable head mask (' + (_MASKER.error or 'no matching head') + '); using the face detector mask for this target.')
+                return None
             mask = mask.resize(image.size, Image.Resampling.NEAREST)
             # Reject segmentation spill into a neighbouring person/body.
             x0, y0, x1, y1 = pose['box']; w=x1-x0; h=y1-y0

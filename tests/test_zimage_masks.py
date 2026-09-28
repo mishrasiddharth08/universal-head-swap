@@ -14,8 +14,8 @@ class ZImageMaskTests(unittest.TestCase):
         mask=Image.new('L',(100,100));ImageDraw.Draw(mask).rectangle((20,20,40,50),fill=255)
         cfg=core.normalize({'zimage_mask_source':'SAM3 (optional)'})
         self.assertIs(zimage.prepare_mask(Image.new('RGB',mask.size),None,cfg,mask),mask)
-        with self.assertRaisesRegex(ValueError,'detected face'):
-            zimage.prepare_mask(Image.new('RGB',mask.size),None,cfg,None)
+        # No face and no custom mask: fall back to the face-detector path (None), not a crash.
+        self.assertIsNone(zimage.prepare_mask(Image.new('RGB',mask.size),None,cfg,None))
     def test_cpu_release_and_neck_protection_after_blur(self):
         class Fake:
             error=''
