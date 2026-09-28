@@ -1,3 +1,9 @@
+## Two-photo Turbo follow-up — 28 September 2026
+
+Tested OriginalLiteEdition ZIT on two additional poses, including sunglasses and an upward-tilted face. The user rejected initial visual quality, including a sample that passed geometric checks. Lower denoise and explicit pose descriptions improved accessory/expression preservation but do not establish identity or visual acceptance. Local tattoo/piercing cleanup produced visible patches and was not shipped as a feature. Cross-symbol removal remains untested.
+
+Fixed an identity-auditing crash when geometry and sharpening were disabled; 181 tests and 2 subtests passed, and both live reruns completed. No quality-success claim is made for these outputs.
+
 ## Z-Image Base LoRA validation — 28 September 2026
 
 Base mode now preserves Forge CFG even in Positive-only mode. Turbo still uses CFG 1. Tested PlatinumEdition ZIB character LoRA at strength 0.7 with native Base BF16, CFG 4, 28 requested steps (19 effective): 240 matched layers, zero skipped; saved 1024x1280 output in 64.01 seconds including loading. Outside-mask pixels unchanged. Final measured face height/width deviations: 3.26%/1.95%; chin deviation 2.97 pixels. Identity likeness and exact neck preservation are not established by these measurements. 180 tests and 2 subtests passed.

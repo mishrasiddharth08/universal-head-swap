@@ -533,8 +533,9 @@ class Session:
             seed=self.plans[min(index,len(self.plans)-1)].seed
             rng=np.random.default_rng(seed%(2**32)); arr=np.asarray(image,dtype=np.float32)
             image=Image.fromarray(np.clip(arr+rng.normal(0,cfg['grain_amount']*255,arr.shape[:2])[...,None],0,255).astype(np.uint8))
-        # Measure the finished result again, including compositing and optional effects.
-        if cfg['geometry_match'] or cfg['match_sharpness']:
+        # Identity auditing also needs the final detected face when corrections are off.
+        final_face=None
+        if cfg['geometry_match'] or cfg['match_sharpness'] or cfg['identity_check']:
             final_target=core.scale_pose(self.target_pose,self.original.size,image.size)
             final_face=core.nearest_face(self.owner.analyzer.faces(image),final_target,image.size)
             if final_target and final_face:

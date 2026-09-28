@@ -121,6 +121,19 @@ class ZImageRuntimeTests(unittest.TestCase):
         with patch('khs.runtime.registry',return_value={'person-ZIT':entry}):
             self.assertEqual(runtime.resolve_adapters(cfg,None,'zimage'),('','person-ZIT'))
 
+    def test_identity_audit_without_geometry_or_sharpness(self):
+        from unittest.mock import Mock
+        args=self.fixtures(headshots=[(Image.new('RGB',(64,64),'gray'),'identity')])
+        model,host,p,owner,cfg,entries,custom=args
+        cfg['identity_check']=True
+        owner.auditor=Mock()
+        session=self.session(*args)
+        try:
+            session.enter(); session.process(); session.batch(0)
+            session.finish_image(Image.new('RGB',session.canvas_size,'gray'),0)
+            owner.auditor.submit.assert_called_once()
+        finally: session.close()
+
     def test_base_character_lora_preserves_native_guidance(self):
         args=self.fixtures()
         model,host,p,owner,cfg,entries,custom=args
