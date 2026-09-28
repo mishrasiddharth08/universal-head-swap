@@ -121,16 +121,18 @@ outside Forge before updating.
 
 Extension code: [MIT License](LICENSE), based on [Adeliox's Klein Head Swap](https://github.com/Adeliox/klein-head-swap) and the owner's Enhanced v5.4 customizations. It uses [Alissonerdx's BFS workflow](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap), [Black Forest Labs' Klein models](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B) and [Forge Neo reference inference](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Inference-References). Model, LoRA and detector weights keep their own upstream licenses; this repository's license does not relicense them. Fine-grid cleanup is adapted from Apache-2.0 ComfyUI-DeGrid; see [license](docs/DEGRID_LICENSE.txt) and [source](docs/FINE_GRID.md).
 
-## Special thanks
+## Special Thanks
 
 Special thanks to:
 
-- [r/sdforall](https://www.reddit.com/r/sdforall/) — community, support and inspiration
-- [r/SECourses](https://www.reddit.com/r/SECourses/) — tutorials, guidance and community support
-- [r/malcolmrey](https://www.reddit.com/r/malcolmrey/) — feedback and encouragement
-- [Forge Neo (sd-webui-forge-classic, neo branch) by Haoming02](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) — the foundation this extension runs on, now with official Klein and Qwen 2.1 support
-- [Adeliox](https://github.com/Adeliox/klein-head-swap) — original Klein Head Swap
+- [r/sdforall](https://www.reddit.com/r/sdforall/) — community discussion and testing
+- [r/SECourses](https://www.reddit.com/r/SECourses/) — community discussion and testing
+- [r/malcolmrey](https://www.reddit.com/r/malcolmrey/) — community discussion and testing
+- [**Haoming02 / sd-webui-forge-classic (neo branch)**](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) — the Forge Neo tree this extension targets
+- [**Adeliox**](https://github.com/Adeliox) — original Klein Head Swap
 - [Alissonerdx](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap) — BFS (Best Face Swap) workflow and LoRAs
+- [**ComfyUI**](https://github.com/comfyanonymous/ComfyUI) — reference for upstream sampler/scheduler coverage
+- The Forge / AUTOMATIC1111 community — for the extension ecosystem this plugs into
 - Project Invisible extensions — memory policy, GPU compatibility and extension philosophy
 
 Thank you to the wider Forge, Diffusers, Qwen, DeGrid and open-source communities.
