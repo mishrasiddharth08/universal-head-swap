@@ -130,10 +130,12 @@ class UniversalHeadSwap(scripts.Script):
         except Exception as e: names=[]; print(f'[UniversalHeadSwap] Adapter list unavailable: {e}')
         with InputAccordion(False,label='Universal Head Swap',elem_classes=['uhs-panel']) as C['enable']:
             gr.HTML('''<style>
-.uhs-panel .tabs > .tab-nav {gap:.35rem; flex-wrap:wrap; border-bottom:1px solid var(--border-color-primary)}
-.uhs-panel .tabs > .tab-nav button {min-height:40px; padding:.5rem .85rem; font-weight:650}
-.uhs-panel .tabitem {padding-top:.65rem}
-.uhs-panel .gradio-row {gap:.65rem; align-items:flex-end}
+.uhs-panel .tabs > .tab-nav {gap:.3rem; flex-wrap:wrap; border-bottom:1px solid var(--border-color-primary); margin-bottom:.5rem}
+.uhs-panel .tabs > .tab-nav button {min-height:38px; padding:.5rem 1rem; font-weight:650; border-radius:8px 8px 0 0}
+.uhs-panel .tabitem {padding-top:.5rem}
+.uhs-panel .gradio-row {gap:.65rem; align-items:flex-end; margin:.15rem 0}
+.uhs-panel .gradio-row > .gradio-column {min-width:0}
+.uhs-panel .gradio-accordion {border-radius:8px; padding:.35rem .75rem}
 .uhs-panel button {border-radius:8px}
 .uhs-panel .prose p {margin:.25rem 0}
 </style>''')
@@ -159,33 +161,33 @@ class UniversalHeadSwap(scripts.Script):
                     with gr.Accordion('Z-Image · character LoRA inpainting',open=False):
                         gr.Markdown('Choose a matching **Character LoRA** above. BFS is not used. Keep **Head only**. Turbo uses CFG 1; Forge controls the step count. Start around 8–9 steps for Turbo; Base needs its usual settings.')
                         with gr.Row():
-                            drop('zimage_variant','Z-Image model type',['Turbo','Base'])
-                            slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05)
+                            drop('zimage_variant','Z-Image model type',['Turbo','Base'],scale=1)
+                            slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05,scale=1)
                         drop('zimage_mask_source','Z-Image mask',['SAM3 (recommended)','Face detector (fast)','SAM3 (optional)'])
                         text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Auto-found in models/SAM 3 · or full path to a checkpoint')
                         with gr.Row():
-                            drop('sam3_device','SAM3 device',['Face detector CPU (recommended)','GPU (CUDA)'])
-                            drop('sam3_quantization','SAM3 precision',['Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'])
+                            drop('sam3_device','SAM3 device',['Face detector CPU (recommended)','GPU (CUDA)'],scale=1)
+                            drop('sam3_quantization','SAM3 precision',['Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'],scale=1)
                         gr.Markdown('A custom white-on-black mask takes priority. SAM3 needs its separately installed package and weights; it runs on CPU and is released before sampling. Dynamic INT8 runs on CPU only and needs torchao. Nothing downloads automatically.')
                     C['edit_scope']=gr.Radio(choices=[('Head only · keep scene','Protected head edit'),('Whole image · restyle','Full image edit')],value=defaults['edit_scope'],label='Edit area')
                     with gr.Row():
-                        identity_setup=gr.Button('Identity only · clear style changes',variant='primary')
-                        analyze=gr.Button('Preview setup')
-                        edit_mask=gr.Button('Edit mask',visible=False)
-                        whole_cleanup=gr.Button('Enable whole-image cleanup',visible=defaults['edit_scope']=='Protected head edit' and any(defaults.get('ban_'+k)=='Remove' for k in ('tattoos','piercings','cross','jewelry')))
+                        identity_setup=gr.Button('Identity only · clear style changes',variant='primary',scale=1)
+                        analyze=gr.Button('Preview setup',scale=1)
+                        edit_mask=gr.Button('Edit mask',visible=False,scale=1)
+                        whole_cleanup=gr.Button('Enable whole-image cleanup',visible=defaults['edit_scope']=='Protected head edit' and any(defaults.get('ban_'+k)=='Remove' for k in ('tattoos','piercings','cross','jewelry')),scale=1)
                     C['ratio_status']=gr.Textbox(label='Status',value='Add headshots. Use Forge Generate when ready.',interactive=False,lines=1)
                     with gr.Accordion('Preview and active settings',open=False) as preview_section:
                         summary=gr.Markdown('Check the active appearance settings before generating.')
                         with gr.Row():
-                            preview_image=gr.Image(label='Edit area',type='pil',format='png',height=220,interactive=False)
-                            preview_ref=gr.Image(label='Selected headshot',type='pil',format='png',height=220,interactive=False)
+                            preview_image=gr.Image(label='Edit area',type='pil',format='png',height=220,interactive=False,scale=1)
+                            preview_ref=gr.Image(label='Selected headshot',type='pil',format='png',height=220,interactive=False,scale=1)
                     with gr.Accordion('Reference selection',open=False):
                         with gr.Row():
-                            drop('pick_mode','Selection',['Best match (smart, no rotation)','Rotate good matches','Always rotation'])
-                            drop('manual_slot','Specific headshot',['Auto (no override)']+[str(i) for i in range(1,21)])
+                            drop('pick_mode','Selection',['Best match (smart, no rotation)','Rotate good matches','Always rotation'],scale=1)
+                            drop('manual_slot','Specific headshot',['Auto (no override)']+[str(i) for i in range(1,21)],scale=1)
                         with gr.Row():
-                            slide('target_face','Target face · largest first',1,20,1)
-                            drop('reference_framing','Reference framing',['Head crop (recommended)','Unmodified reference','Match target framing (experimental)'])
+                            slide('target_face','Target face · largest first',1,20,1,scale=1)
+                            drop('reference_framing','Reference framing',['Head crop (recommended)','Unmodified reference','Match target framing (experimental)'],scale=1)
                         with gr.Row():
                             check('auto_pick_best','Score references automatically')
                             check('rotate_top_only','Rotate only good matches')
@@ -235,8 +237,8 @@ class UniversalHeadSwap(scripts.Script):
                             for key in row: drop('ban_'+key,labels[key],core.POLICIES)
                     check('removal_priority','Prioritize removal over conflicting prompts')
                     with gr.Row():
-                        drop('ban_channel','Guidance mode',['Positive + Negative (uses at least CFG 1.1)','Positive-only (fast, CFG 1.0)'])
-                        slide('blend_slider','Swap instruction strength',0,100,5)
+                            drop('ban_channel','Guidance mode',['Positive + Negative (uses at least CFG 1.1)','Positive-only (fast, CFG 1.0)'],scale=1)
+                            slide('blend_slider','Swap instruction strength',0,100,5,scale=1)
                     guidance_note=gr.Markdown('Negative prompts active. Effective CFG is at least 1.1; additional guidance can take longer.')
                     use_negatives=gr.Button('Use negative prompts for cleanup',size='sm')
                     gr.Markdown('Remove jewelry or piercings also requires bare ears. Inspect visible skin: removal instructions are not a guarantee.')
