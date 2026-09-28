@@ -65,7 +65,29 @@ class SAM3Masker:
             if not self.bpe_path.is_file():
                 raise RuntimeError("SAM3 tokenizer file is missing.")
             kwargs["bpe_path"] = str(self.bpe_path)
-        self.model = build_sam3_image_model(**kwargs)
+        self.model = None
+        safetensors_state = None
+        try:
+            self.model = build_sam3_image_model(**kwargs)
+        except Exception as first_error:
+            # The official loader expects a pickled .pt. Community checkpoints are
+            # often safetensors; build unweighted and load the state dict directly.
+            self.model = None
+            try:
+                from safetensors.torch import load_file
+                unweighted = dict(kwargs); unweighted['checkpoint_path'] = None
+                self.model = build_sam3_image_model(**unweighted)
+                safetensors_state = load_file(str(self.checkpoint))
+                missing, unexpected = self.model.load_state_dict(safetensors_state, strict=False)
+                if len(missing) > len(self.model.state_dict()) * 0.5:
+                    raise RuntimeError(f'checkpoint keys do not match SAM3 ({len(missing)} missing)')
+                print(f'[UniversalHeadSwap] SAM3 loaded from safetensors: {len(safetensors_state)} tensors'
+                      + (f'; {len(missing)} missing' if missing else ''))
+            except Exception as exc:
+                self.model = None
+                raise RuntimeError(
+                    f'SAM3 checkpoint could not be loaded ({type(first_error).__name__}: '
+                    + str(first_error)[:120] + '; safetensors fallback: ' + str(exc)[:120] + ')') from exc
         self._apply_quantization(quant, device)
         if hasattr(self.model, "eval"):
             self.model.eval()
