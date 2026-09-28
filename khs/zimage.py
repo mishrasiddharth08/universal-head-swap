@@ -3,7 +3,7 @@ from pathlib import Path
 import threading
 
 import numpy as np
-from PIL import Image
+from PIL import Image,ImageFilter
 
 from . import core
 
@@ -41,18 +41,23 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
     global _MASKER, _MASKER_KEY
     if has_custom_mask(custom_mask):
         return custom_mask
-    if cfg.get('zimage_mask_source') != 'SAM3 (optional)':
+    if not str(cfg.get('zimage_mask_source') or '').startswith('SAM3'):
         return None
     if not pose:
         # No detected face: without a mask source there is nothing to segment, so
         # fall back to the face-detector path instead of aborting folder batches.
         print('[UniversalHeadSwap] SAM3 head selection needs a detected face; using the face detector mask for this target.')
         return None
-    checkpoint = Path(str(cfg.get('sam3_checkpoint') or '')).expanduser()
-    if not checkpoint.is_file():
-        # SAM3 not installed/configured: keep the batch alive with the face-detector mask.
-        print('[UniversalHeadSwap] SAM3 checkpoint is not set up; using the face detector mask. Select an existing local SAM3 checkpoint for SAM3 masking.')
-        return None
+    typed=Path(str(cfg.get('sam3_checkpoint') or '').strip()).expanduser()
+    if not typed.is_file():
+        from .sam3_setup import default_checkpoint
+        found=default_checkpoint()
+        if not found:
+            print('[UniversalHeadSwap] No SAM3 checkpoint found (models/SAM 3); using the face detector mask.')
+            return None
+        checkpoint=found
+    else:
+        checkpoint=typed
     from .sam3_mask import SAM3Masker
     stat = checkpoint.stat()
     device = 'cuda' if cfg.get('sam3_device') == 'GPU (CUDA)' else 'cpu'
@@ -90,7 +95,7 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
 
 def protect_sam3_neck(region,pose,cfg):
     """Clamp automatic SAM3 feathering after blur; explicit masks stay user-controlled."""
-    if cfg.get('zimage_mask_source')!='SAM3 (optional)' or has_custom_mask(cfg.get('custom_mask')) or not pose:
+    if not str(cfg.get('zimage_mask_source') or '').startswith('SAM3') or has_custom_mask(cfg.get('custom_mask')) or not pose:
         return region
     _,y0,_,y1=pose['box']; height=y1-y0
     arr=np.asarray(region.mask,dtype=np.float32).copy()
@@ -112,7 +117,14 @@ def configure_inpaint(session):
     canvas.paste(mask.resize((x1-x0,y1-y0),Image.Resampling.LANCZOS),(x0,y0))
     if canvas.getbbox() is None:
         raise ValueError('Z-Image edit mask is empty.')
-    settings=dict(image_mask=canvas, latent_mask=canvas.copy(),
+    # Soft edges let Turbo/Base re-render cleanly into the surrounding skin and hair
+    # instead of stopping on a hard circle. The latent mask stays slightly tighter
+    # than the overlay mask so the outer feather is painted from well-denoised
+    # context rather than a half-strength latent.
+    feather=max(8,min(32,session.canvas_size[0]//48))
+    soft=canvas.filter(ImageFilter.GaussianBlur(feather))
+    latent=soft.filter(ImageFilter.GaussianBlur(max(4,feather//2)))
+    settings=dict(image_mask=soft, latent_mask=latent,
                   inpaint_full_res=False, inpainting_mask_invert=0,
                   inpainting_fill=1, mask_blur=0, mask_round=False,
                   denoising_strength=float(session.cfg['zimage_denoise']))
@@ -125,7 +137,7 @@ def configure_inpaint(session):
         session.host.dynamic.edit=False
     session.analysis['native_inpaint']={'denoise':settings['denoising_strength'],
         'mask_source':session.cfg.get('zimage_mask_source','Face detector (fast)'),
-        'sampling_size':list(session.canvas_size),'reference_encodes':0}
+        'mask_feather_px':feather,'sampling_size':list(session.canvas_size),'reference_encodes':0}
 
 
 def prepare_batch(session,index):

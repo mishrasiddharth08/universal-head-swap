@@ -161,8 +161,8 @@ class UniversalHeadSwap(scripts.Script):
                         with gr.Row():
                             drop('zimage_variant','Z-Image model type',['Turbo','Base'])
                             slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05)
-                        drop('zimage_mask_source','Z-Image mask',['Face detector (fast)','SAM3 (optional)'])
-                        text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Optional: full path to an installed SAM3 checkpoint')
+                        drop('zimage_mask_source','Z-Image mask',['SAM3 (recommended)','Face detector (fast)','SAM3 (optional)'])
+                        text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Auto-found in models/SAM 3 · or full path to a checkpoint')
                         with gr.Row():
                             drop('sam3_device','SAM3 device',['Face detector CPU (recommended)','GPU (CUDA)'])
                             drop('sam3_quantization','SAM3 precision',['Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'])
@@ -356,23 +356,41 @@ class UniversalHeadSwap(scripts.Script):
             use_negatives.click(lambda:gr.update(value='Positive + Negative (uses at least CFG 1.1)'),outputs=C['ban_channel'],queue=False)
             edit_mask.click(lambda:(gr.update(selected='detail'),gr.update(open=True)),outputs=[tabs,mask_section],queue=False)
             whole_cleanup.click(lambda:(gr.update(value='Full image edit'),gr.update(value=True)),outputs=[C['edit_scope'],C['removal_priority']],queue=False)
+            def sam3_installed():
+                try:
+                    from khs.sam3_setup import default_checkpoint
+                    found=default_checkpoint()
+                    return str(found) if found else None
+                except Exception: return None
+            SMART_OUTPUTS=[C['lora_dropdown'],C['zimage_variant'],C['zimage_mask_source'],C['sam3_checkpoint']]
             def sync_adapter(preset,checkpoint,automatic):
-                if not automatic: return gr.update()
-                key=str(preset).lower()
-                if key in ('zit','zib') or 'zimage' in key.replace('-','').replace('_','').replace(' ',''):
-                    return gr.update(choices=['Auto (match model)','Not used (Z-Image)']+names,value='Not used (Z-Image)')
-                if 'qwen' in key: family,size='qwen',None
-                elif 'klein' in key:
-                    checkpoint=str(checkpoint or '').lower()
-                    family,size='klein',4 if '4b' in checkpoint or '4b' in key else 9
-                else: return gr.update(value='Auto (match model)')
+                """Smart settings: choose the best setup for the selected model preset.
+
+                Klein/Qwen: pick the recommended BFS LoRA. Z-Image (ZIT/ZIB): switch to
+                a character LoRA, set Turbo/Base from the preset and prefer SAM3 masks
+                when a checkpoint exists under models/SAM 3.
+                """
+                if not automatic:
+                    return gr.update(),gr.update(),gr.update(),gr.update()
+                key=str(preset or '').lower(); checkpoint=str(checkpoint or '').lower()
+                flat=(key+' '+checkpoint).replace('-','').replace('_','').replace(' ','')
+                if 'zimage' in flat or 'zit' in key.split() or 'zib' in key.split():
+                    variant='Base' if 'zib' in flat or 'base' in flat else 'Turbo'
+                    found=sam3_installed()
+                    return (gr.update(choices=['Auto (match model)','Not used (Z-Image)']+names,value='Not used (Z-Image)'),
+                            gr.update(value=variant),
+                            gr.update(value='SAM3 (optional)') if found else gr.update(),
+                            gr.update(value=found) if found else gr.update())
+                if 'qwen' in flat: family,size='qwen',None
+                elif 'klein' in flat: family,size='klein',4 if '4b' in flat else 9
+                else: return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update()
                 try:
                     import networks
                     networks.list_available_networks()
                     entries=runtime.registry()
                     choice=core.select_adapter({name:item.metadata for name,item in entries.items()},size,family)
-                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice)
-                except Exception: return gr.update(value='Auto (match model)')
+                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice),gr.update(),gr.update(),gr.update()
+                except Exception: return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update()
             preset_component=self.components.get('forge_preset')
             checkpoint_component=self.components.get('checkpoint')
             try:
@@ -383,9 +401,9 @@ class UniversalHeadSwap(scripts.Script):
                 pass
             if preset_component is not None and checkpoint_component is not None:
                 inputs=[preset_component,checkpoint_component,C['auto_model_adapter']]
-                gr.context.Context.root_block.load(sync_adapter,inputs=inputs,outputs=C['lora_dropdown'],queue=False)
+                gr.context.Context.root_block.load(sync_adapter,inputs=inputs,outputs=SMART_OUTPUTS,queue=False)
                 for control in inputs:
-                    control.change(sync_adapter,inputs=inputs,outputs=C['lora_dropdown'],queue=False)
+                    control.change(sync_adapter,inputs=inputs,outputs=SMART_OUTPUTS,queue=False)
             def refresh_adapters():
                 import networks
                 networks.list_available_networks(); ns=list(networks.available_networks)

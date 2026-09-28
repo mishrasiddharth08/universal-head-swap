@@ -49,14 +49,21 @@ class UIConstructionTests(unittest.TestCase):
                     'nested/bfs_head_v1_flux-klein_9b_step3500_rank128',
                     'nested/bfs_head_v1_flux-klein_4b')}
                 networks=ModuleType('networks'); networks.list_available_networks=lambda:None
-                with patch.dict(sys.modules,{'networks':networks}),patch.object(ui.runtime,'registry',return_value=entries):
+                with patch.dict(sys.modules,{'networks':networks}),patch.object(ui.runtime,'registry',return_value=entries),patch.object(ui,'sam3_installed',return_value=None,create=True):
                     for quant in ('Q4_K_M.gguf','Q8_0.gguf','fp8.safetensors','int8_convrot.safetensors','bf16.safetensors'):
                         for preset,size,expected in [('qwen_image_2.1',None,'nested/bfs_head_v1_qwen_2.1'),('klein',9,'nested/bfs_head_v1_flux-klein_9b_step3500_rank128'),('klein',4,'nested/bfs_head_v1_flux-klein_4b')]:
                             checkpoint=f'{preset}-{size}b-{quant}'
-                            self.assertEqual(callbacks[0](preset,checkpoint,True)['value'],expected)
-                    self.assertNotIn('value',callbacks[0]('klein','klein-9b',False))
-                    self.assertEqual(callbacks[0]('zimage','Z-Image-Turbo-Q4.gguf',True)['value'],'Not used (Z-Image)')
-                    self.assertEqual(callbacks[0]('zit','Z-Image-Turbo-BF16.safetensors',True)['value'],'Not used (Z-Image)')
+                            lora,variant,mask_source,sam3_path=callbacks[0](preset,checkpoint,True)
+                            self.assertEqual(lora['value'],expected)
+                            self.assertEqual(variant.get('value','Turbo'),'Turbo')
+                    lora,_,_,_=callbacks[0]('klein','klein-9b',False)
+                    self.assertNotIn('value',lora)
+                    lora,variant,_,_=callbacks[0]('zimage','Z-Image-Turbo-Q4.gguf',True)
+                    self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Turbo')
+                    lora,variant,_,_=callbacks[0]('zit','Z-Image-Turbo-BF16.safetensors',True)
+                    self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Turbo')
+                    lora,variant,_,_=callbacks[0]('zib','Z-Image-Base-BF16.safetensors',True)
+                    self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Base')
                 self.assertEqual(len(controls),len(core.ARG_KEYS))
                 self.assertEqual(len({id(c) for c in controls}),len(controls))
                 for c in controls: self.assertIsInstance(c,gr.components.Component)

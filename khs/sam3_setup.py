@@ -11,6 +11,18 @@ _SETUP_LOCK=threading.Lock()
 def model_directory():
     return Path(__file__).resolve().parents[3]/'models'/'sam3'
 
+def default_checkpoint():
+    """Find an installed SAM3 checkpoint: models/SAM 3/*, models/sam3/* (newest first)."""
+    folder=model_directory().parent
+    for name in ('SAM 3','sam3','SAM3'):
+        candidate=folder/name
+        if not candidate.is_dir(): continue
+        files=sorted(candidate.glob('*.safetensors'))+sorted(candidate.glob('*.pt'))
+        files.sort(key=lambda f:f.stat().st_mtime,reverse=True)
+        for f in files:
+            if f.is_file() and f.stat().st_size>0: return f
+    return None
+
 def activate_runtime():
     runtime=model_directory()/'runtime'
     if (runtime/'sam3'/'__init__.py').is_file() and str(runtime) not in sys.path:

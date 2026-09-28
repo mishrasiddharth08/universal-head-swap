@@ -449,7 +449,7 @@ class StorageTests(unittest.TestCase):
             core.compatible_adapter('bfs_head_v5_qwen_image_edit',None,family='zimage')
         cfg=core.normalize({'zimage_variant':'bad','zimage_denoise':5,'zimage_mask_source':'bad'})
         self.assertEqual((cfg['zimage_variant'],cfg['zimage_denoise'],cfg['zimage_mask_source']),
-                         ('Turbo',1.0,'Face detector (fast)'))
+                         ('Turbo',1.0,'SAM3 (recommended)'))
 
     def test_qwen_picture_remap(self):
         self.assertEqual(core.remap_picture_refs('use Picture 1 as the target; use Picture 2 identity',-1),
