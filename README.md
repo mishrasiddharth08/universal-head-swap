@@ -182,3 +182,12 @@ Both 6 and 8 GB profiles try GPU decoding first and can recover using CPU decodi
 ### Hair edges and body cleanup
 
 Protected identity editing keeps the original hairstyle and uses a smaller face mask unless hairstyle/color changes are requested. This reduces seams from mixing new upper hair with old lower strands. Identity only retains your Remove choices. For navel piercings, body tattoos or other marks outside the head, use **Enable whole-image cleanup** or paint those areas in the custom mask. Whole-image cleanup can change body and scene detail; inspect the result. See VALIDATION.md for measured results and limits.
+
+## Qwen 2.1 BFS v1.1 Alternative
+
+Automatic Qwen selection now prefers `bfs_head_v1.1_alternative_qwen_2.1`, then `bfs_head_v1.1_qwen_2.1`, then the original `bfs_head_v1_qwen_2.1`. Subfolders are supported; manual selection and Klein selection are unchanged. Put the adapter in Forge's `models/Lora` folder or a subfolder, then restart/reload Forge and refresh LoRAs.
+
+- [Requested alternative weights](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/blob/main/bfs_head_v1.1_alternative_qwen_2.1.safetensors)
+- [Author's Qwen 2.1 workflow](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/blob/main/workflows/Head%20Swap%20V1%20Qwen%202.1%20Workflow.json)
+
+The workflow uses standard BFS v1.1 at strength 1, target as image1 and head reference as image2. Its eight-step setup also uses a separate Pruna eight-step adapter and DEIS sampler. Installing BFS alone does not reproduce that speed setup; existing guidance/sampler settings are retained. Protected hair, removal choices, character LoRA and memory controls remain active. The alternative weights were checksum-verified, and 152 extension tests passed. Fresh visual quality and every quantization are not established by these tests.

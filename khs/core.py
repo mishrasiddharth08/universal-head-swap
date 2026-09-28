@@ -250,10 +250,11 @@ def select_adapter(entries,size,family='klein'):
         found_family,found=adapter_family(name,meta)
         if found_family!=family or not any(x in name.lower() for x in ('bfs','swap')): continue
         if family=='klein' and found!=size: continue
-        preferred='bfs_head_v1_qwen_2.1' if family=='qwen' else ('bfs_head_v1_flux-klein_9b_step3500_rank128' if size==9 else '')
+        preferred=(('bfs_head_v1.1_alternative_qwen_2.1','bfs_head_v1.1_qwen_2.1','bfs_head_v1_qwen_2.1')
+                   if family=='qwen' else (('bfs_head_v1_flux-klein_9b_step3500_rank128',) if size==9 else ()))
         basename=clean_name(name).split('/')[-1].lower()
-        exact=bool(preferred and basename==preferred)
-        eligible.append((100*exact+40*bool(family=='klein' and size and found==size)+20*('bfs_head' in name.lower()),name))
+        priority=len(preferred)-preferred.index(basename) if basename in preferred else 0
+        eligible.append((100*priority+40*bool(family=='klein' and size and found==size)+20*('bfs_head' in name.lower()),name))
     if not eligible:
         if family=='klein':
             raise ValueError('No verified matching face-swap adapter found. Load Klein and choose its 4B or 9B BFS LoRA.')

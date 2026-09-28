@@ -131,3 +131,8 @@ Restart Forge completely after the current batch finishes to load both updated e
 - Compact four-tab UI with side-by-side headshots and LoRA selectors. Identity only explicitly clears appearance overrides while preserving selected LoRAs, enables protected Qwen head-crop generation, and sets a 1.25 MP reference budget at 768 maximum side. Headshots use file-backed Gradio input; normalized CPU reference copies are capped at 1536 px each. Existing offload and bounded latent cache remain in place. The real head-crop test completed in 81 seconds; advisory selected/median likeness scores improved to 0.4804/0.4107. No peak-memory reduction benchmark or all-quantization claim is made.
 
 - Qwen Head Swap references capped at 768 side / 1.25 MP; full-scene sampling capped at 0.75 MP. Offloaded Qwen workers return unused CUDA cache after each image. Protected head size/position correction is accepted only after face detection verifies alignment. Full-image correction remains opt-in. Peak VRAM and visual results still need live validation.
+
+## 2026-09-28
+
+- Prefer the requested Qwen BFS v1.1 Alternative with standard v1.1/v1 fallback, including nested LoRA folders. Preserve manual/Klein selection and existing editing controls.
+- Add version-selection regression tests and document the upstream workflow speed-adapter dependency.
