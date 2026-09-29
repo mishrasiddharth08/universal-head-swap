@@ -22,16 +22,14 @@ QUANTIZATIONS = ('Auto (detected)', 'Full precision (fp32)', 'Half (fp16)', 'BFl
 def auto_settings():
     """Auto-detect the best SAM3 device and precision for this machine.
 
-    GPU with BFloat16 support -> CUDA + BFloat16. GPU without -> CUDA + fp16.
-    No GPU -> CPU + full precision. Returns (device, quantization).
+    SAM3's processor feeds Float inputs regardless of weight dtype, so a
+    global BFloat16/FP16 cast breaks inference with a dtype mismatch. The
+    reliable automatic choice is therefore fp32 on whichever device exists.
     """
     try:
         import torch
         if torch.cuda.is_available():
-            props = torch.cuda.get_device_properties(torch.cuda.device(0))
-            if getattr(props, 'major', 0) >= 8 or torch.cuda.is_bf16_supported():
-                return 'cuda', 'BFloat16'
-            return 'cuda', 'Half (fp16)'
+            return 'cuda', 'Full precision (fp32)'
     except Exception:
         pass
     return 'cpu', 'Full precision (fp32)'
