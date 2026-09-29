@@ -78,6 +78,10 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
         face = core.scale_pose(pose, image.size, sample.size)['box']
         try:
             mask = _MASKER.mask(sample, prompt='head', face_box=face)
+            if (mask is None or mask.getbbox() is None) and not _MASKER.error:
+                # Proven workflows ground on 'face' as well; accept the tighter
+                # mask when the head prompt misses.
+                mask = _MASKER.mask(sample, prompt='face', confidence=0.33, face_box=face)
             if mask is None or mask.getbbox() is None:
                 # Missing mask on one photo must not kill a folder batch; fall back to the detector mask.
                 print('[UniversalHeadSwap] SAM3 found no reliable head mask (' + (_MASKER.error or 'no matching head') + '); using the face detector mask for this target.')
