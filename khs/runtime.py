@@ -565,7 +565,8 @@ class Session:
             final_target=core.scale_pose(self.target_pose,self.original.size,image.size)
             final_face=core.nearest_face(self.owner.analyzer.faces(image),final_target,image.size)
             if final_target and final_face:
-                quality['geometry_final']=core.geometry_report(final_target,final_face)
+                quality['geometry_final']=core.geometry_report(final_target,final_face,
+                    self.original.size,image.size)
                 original_score=core.metrics(core.face_crop(self.original,self.target_pose))['sharp']
                 final_score=core.metrics(core.face_crop(image,final_face))['sharp']
                 quality['detail_final']={'original_score':round(original_score,4),'output_score':round(final_score,4),

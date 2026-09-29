@@ -580,7 +580,7 @@ def nearest_face(faces,target_pose,size):
     if distance(candidate)>max(0.08*math.hypot(*size),0.7*max(tx1-tx0,ty1-ty0)): return None
     return candidate
 
-def geometry_report(target_pose,generated_pose):
+def geometry_report(target_pose,generated_pose,target_size=None,generated_size=None):
     tx0,ty0,tx1,ty1=target_pose['box']; gx0,gy0,gx1,gy1=generated_pose['box']
     if min(tx1-tx0,ty1-ty0,gx1-gx0,gy1-gy0)<=0: raise ValueError('Invalid face box for size measurement.')
     height_change=(gy1-gy0)/(ty1-ty0)-1
@@ -589,14 +589,28 @@ def geometry_report(target_pose,generated_pose):
     width_error=abs((gx1-gx0)/(tx1-tx0)-1)
     center_error=math.hypot((gx0+gx1-tx0-tx1)/2,(gy0+gy1-ty0-ty1)/2)
     chin_error=math.hypot((gx0+gx1-tx0-tx1)/2,gy1-ty1)
-    return {'head_height_error_percent':round(height_error*100,2),'head_center_error_px':round(center_error,2),
+    report={'head_height_error_percent':round(height_error*100,2),'head_center_error_px':round(center_error,2),
             'head_width_error_percent':round(width_error*100,2),'chin_error_px':round(chin_error,2),
             'head_height_change_percent':round(height_change*100,2),
             'head_width_change_percent':round(width_change*100,2),
-            'head_area_change_percent':round(((1+height_change)*(1+width_change)-1)*100,2),
-            'geometry_target_met':bool(height_error<=0.08 and width_error<=0.10
-                and center_error<=max(3,(ty1-ty0)*0.10) and chin_error<=max(3,(ty1-ty0)*0.08)),
-            'note':'Measured face width, height, center and source-anchored chin; excludes hair volume.'}
+            'head_area_change_percent':round(((1+height_change)*(1+width_change)-1)*100,2)}
+    if target_size and generated_size:
+        # Body-to-head ratio: head height as a fraction of the full frame must be
+        # preserved from the input photo onto the output image.
+        th=ty1-ty0; gh=gy1-gy0
+        source_ratio=th/target_size[1] if target_size[1] else 0
+        output_ratio=gh/generated_size[1] if generated_size[1] else 0
+        ratio_change=abs(output_ratio/source_ratio-1) if source_ratio>0 else 0
+        report['body_to_head_ratio_source']=round(1/source_ratio,3) if source_ratio>0 else None
+        report['body_to_head_ratio_output']=round(1/output_ratio,3) if output_ratio>0 else None
+        report['body_to_head_ratio_change_percent']=round(ratio_change*100,2)
+    else:
+        ratio_change=0
+    report['geometry_target_met']=bool(height_error<=0.08 and width_error<=0.10
+        and center_error<=max(3,(ty1-ty0)*0.10) and chin_error<=max(3,(ty1-ty0)*0.08)
+        and ratio_change<=0.12)
+    report['note']='Measured face width, height, center, source-anchored chin and body-to-head frame ratio; excludes hair volume.'
+    return report
 
 def memory_limits(total_bytes,free_bytes,requested=1024,megapixels=2.5):
     gib=1024**3; total=total_bytes/gib; free=free_bytes/gib
