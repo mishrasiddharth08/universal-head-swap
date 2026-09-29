@@ -149,6 +149,10 @@ def configure_inpaint(session):
                   inpaint_full_res=False, inpainting_mask_invert=0,
                   inpainting_fill=1, mask_blur=0, mask_round=False,
                   denoising_strength=denoise)
+    # Remember exactly what the model was told to regenerate. The paste-back
+    # step composites with this same mask mapped to original coordinates, so
+    # the regenerated area and the blended area can never disagree.
+    session.inpaint_mask_canvas=soft
     for key,value in settings.items():
         session.set_p(key,value)
     for key in ('overlay_images','mask_for_overlay','paste_to','mask','nmask'):
