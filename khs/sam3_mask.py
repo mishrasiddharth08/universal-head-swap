@@ -94,10 +94,26 @@ class SAM3Masker:
         self.processor = Sam3Processor(self.model, device=device)
 
     def _apply_quantization(self, quantization, device):
-        """Cast or quantize the loaded model in place. fp32 is the untouched baseline."""
+        """Cast or quantize the loaded model in place.
+
+        Community checkpoints often store BFloat16 weights while the CPU
+        processor feeds Float inputs, which crashes with a dtype mismatch.
+        On CPU the model is therefore always normalized to a single dtype.
+        """
+        import torch
+        cast=getattr(self.model,'to',None)
+        if str(device).startswith('cpu'):
+            if quantization in ('Dynamic INT8 (CPU only)', 'INT8 weight-only', 'INT4 weight-only'):
+                # torchao quantizers manage their own weight dtypes.
+                pass
+            elif quantization == 'BFloat16' and cast:
+                print('[UniversalHeadSwap] BFloat16 SAM3 runs on GPU only; using full precision on CPU.')
+                cast(torch.float32)
+            elif cast:
+                cast(torch.float32)
+            return
         if quantization in (None, '', 'Full precision (fp32)'):
             return
-        import torch
         try:
             if quantization == 'Half (fp16)':
                 if not str(device).startswith('cuda'):

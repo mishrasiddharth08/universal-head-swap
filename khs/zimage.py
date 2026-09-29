@@ -66,7 +66,9 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
     with _MASK_LOCK:
         if key != _MASKER_KEY:
             clear_mask_cache()
-            _MASKER = SAM3Masker(checkpoint, device=device, quantization=quant)
+            from .sam3_setup import default_bpe
+            bpe=default_bpe()
+            _MASKER = SAM3Masker(checkpoint, bpe_path=bpe, device=device, quantization=quant)
             _MASKER_KEY = key
         sample = image.copy()
         sample.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
