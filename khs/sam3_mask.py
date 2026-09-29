@@ -14,9 +14,27 @@ from PIL import Image
 from .core import BoundedCache, image_hash
 
 
-QUANTIZATIONS = ('Full precision (fp32)', 'Half (fp16)', 'BFloat16', 'FP8 E4M3 (GPU)',
+QUANTIZATIONS = ('Auto (detected)', 'Full precision (fp32)', 'Half (fp16)', 'BFloat16', 'FP8 E4M3 (GPU)',
                  'FP8 E5M2 (GPU)', 'Dynamic INT8 (CPU only)', 'INT8 weight-only',
                  'INT4 weight-only')
+
+
+def auto_settings():
+    """Auto-detect the best SAM3 device and precision for this machine.
+
+    GPU with BFloat16 support -> CUDA + BFloat16. GPU without -> CUDA + fp16.
+    No GPU -> CPU + full precision. Returns (device, quantization).
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(torch.cuda.device(0))
+            if getattr(props, 'major', 0) >= 8 or torch.cuda.is_bf16_supported():
+                return 'cuda', 'BFloat16'
+            return 'cuda', 'Half (fp16)'
+    except Exception:
+        pass
+    return 'cpu', 'Full precision (fp32)'
 
 
 class SAM3Masker:

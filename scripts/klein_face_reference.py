@@ -165,9 +165,7 @@ class UniversalHeadSwap(scripts.Script):
                             slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05,scale=1)
                         drop('zimage_mask_source','Z-Image mask',['SAM3 (recommended)','Face detector (fast)','SAM3 (optional)'])
                         text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Auto-found in models/SAM 3 · or full path to a checkpoint')
-                        with gr.Row():
-                            drop('sam3_device','SAM3 device',['Face detector CPU (recommended)','GPU (CUDA)'],scale=1)
-                            drop('sam3_quantization','SAM3 precision',['Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'],scale=1)
+                        gr.Markdown('SAM3 device and precision are auto-detected from your hardware (GPU+BFloat16 on modern cards, CPU+fp32 otherwise). No manual setup needed.')
                         gr.Markdown('A custom white-on-black mask takes priority. SAM3 needs its separately installed package and weights; it runs on CPU and is released before sampling. Dynamic INT8 runs on CPU only and needs torchao. Nothing downloads automatically.')
                     C['edit_scope']=gr.Radio(choices=[('Head only · keep scene','Protected head edit'),('Whole image · restyle','Full image edit')],value=defaults['edit_scope'],label='Edit area')
                     with gr.Row():

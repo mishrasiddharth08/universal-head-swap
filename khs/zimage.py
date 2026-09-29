@@ -58,10 +58,13 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
         checkpoint=found
     else:
         checkpoint=typed
-    from .sam3_mask import SAM3Masker
+    from .sam3_mask import SAM3Masker,auto_settings
     stat = checkpoint.stat()
-    device = 'cuda' if cfg.get('sam3_device') == 'GPU (CUDA)' else 'cpu'
-    quant = cfg.get('sam3_quantization') or 'Full precision (fp32)'
+    auto_device,auto_quant = auto_settings()
+    device = auto_device
+    quant = cfg.get('sam3_quantization') or auto_quant
+    if quant == 'Auto (detected)':
+        quant = auto_quant
     key = (str(checkpoint.resolve()), stat.st_size, stat.st_mtime_ns, device, quant)
     with _MASK_LOCK:
         if key != _MASKER_KEY:

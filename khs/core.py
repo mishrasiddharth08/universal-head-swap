@@ -55,7 +55,7 @@ DEFAULTS.update(qwen_detail_crop=True,auto_model_adapter=True,enable=False,heads
     match_sharpness=True,geometry_match=True,quality_strict=False,keep_original_canvas=True,
     identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5,
     zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='SAM3 (optional)',sam3_checkpoint='',
-    sam3_device='Face detector CPU (recommended)',sam3_quantization='Full precision (fp32)',cleanup_mask=None)
+    sam3_device='Auto (detected)',sam3_quantization='Auto (detected)',cleanup_mask=None)
 DEFAULTS.update({k:[] for k in CATEGORIES})
 DEFAULTS.update({'ban_'+k:'Remove' for k in APPEARANCE})
 EXCLUDE_SAVE = {'cleanup_mask','enable','headshots','custom_mask','preset_dropdown','preset_save_name','preset_save_btn',
@@ -118,10 +118,10 @@ def normalize(values=None):
     if cfg['zimage_variant'] not in ('Turbo','Base'): cfg['zimage_variant']='Turbo'
     if cfg['zimage_mask_source'] not in ('Face detector (fast)','SAM3 (optional)','SAM3 (recommended)'):
         cfg['zimage_mask_source']='SAM3 (recommended)'
-    if cfg['sam3_device'] not in ('Face detector CPU (recommended)','GPU (CUDA)'):
-        cfg['sam3_device']='Face detector CPU (recommended)'
-    if cfg['sam3_quantization'] not in ('Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'):
-        cfg['sam3_quantization']='Full precision (fp32)'
+    if cfg['sam3_device'] not in ('Auto (detected)',):
+        cfg['sam3_device']='Auto (detected)'
+    if cfg['sam3_quantization'] not in ('Auto (detected)','Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'):
+        cfg['sam3_quantization']='Auto (detected)'
     for k in CATEGORIES:
         cfg[k]=[str(x) for x in cfg[k]] if isinstance(cfg[k],(tuple,list)) else ([str(cfg[k])] if cfg[k] else [])
     return cfg

@@ -26,7 +26,7 @@ class ZImageMaskTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             checkpoint=Path(folder)/'sam3.pt';checkpoint.write_bytes(b'test')
             cfg=core.normalize({'zimage_mask_source':'SAM3 (optional)','sam3_checkpoint':str(checkpoint)})
-            with patch('khs.sam3_mask.SAM3Masker',Fake):
+            with patch('khs.sam3_mask.SAM3Masker',Fake),patch('khs.sam3_mask.auto_settings',lambda:('cpu','Full precision (fp32)')):
                 mask=zimage.prepare_mask(image,pose,cfg,None)
                 self.assertEqual(zimage._MASKER.device,'cpu');self.assertEqual(zimage._MASKER.released,1)
                 region=core.build_region(image,pose,feather=.25,mask=mask)
