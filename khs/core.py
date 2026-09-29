@@ -705,8 +705,10 @@ def composite_region(generated,region,color_match=0):
                 128+.5*r-.418688*g-.081312*b),axis=-1)
         source=ycbcr(base); changed=ycbcr(arr)
         def skin(value):
-            return ((value[...,0]>45)&(value[...,1]>70)&(value[...,1]<140)
+            return ((value[...,0]>45)&(value[...,0]<235)&(value[...,1]>70)&(value[...,1]<140)
                     &(value[...,2]>120)&(value[...,2]<190))
+        strength=float(color_match)
+        # 1) Jaw/neck seam: match the generated jaw to the preserved neck skin.
         ys,xs=np.where(alpha>0.05)
         if len(xs):
             left,right,top,bottom=xs.min(),xs.max()+1,ys.min(),ys.max()+1
@@ -717,14 +719,32 @@ def composite_region(generated,region,color_match=0):
             neck=central&(yy>=bottom)&(yy<min(alpha.shape[0],bottom+.18*height))&(alpha<0.05)&skin(source)
             if jaw.sum()>20 and neck.sum()>20:
                 delta=np.median(source[neck],axis=0)-np.median(changed[jaw],axis=0)
-                delta=np.clip(delta,(-16,-10,-10),(16,10,10))*float(color_match)
+                delta=np.clip(delta,(-16,-10,-10),(16,10,10))*strength
                 selected=skin(changed)&(alpha>0.05)
                 weight=alpha[...,None]
                 changed[selected]+=delta*weight[selected]
-                y,cb,cr=changed[...,0],changed[...,1]-128,changed[...,2]-128
-                corrected=np.stack((y+1.402*cr,y-.344136*cb-.714136*cr,y+1.772*cb),axis=-1)
-                pixels=arr.copy(); pixels[selected]=corrected[selected]
-                patch=Image.fromarray(np.clip(pixels,0,255).astype(np.uint8))
+        # 2) Global skin-tone transfer: match the generated skin's mean and
+        # contrast to the preserved body skin, per YCbCr channel, clamped so
+        # lighting structure survives. This is what removes the overall
+        # 'pasted head' tone difference, not just the seam.
+        src_skin=skin(source)&(alpha<=0.05); gen_skin=skin(changed)&(alpha>=0.65)
+        if src_skin.sum()>60 and gen_skin.sum()>60:
+            apply_weight=np.clip((skin(changed)&(alpha>0.05)).astype(np.float32)*alpha,0,1)
+            adjusted=np.empty_like(changed)
+            for c in range(3):
+                smean=float(source[src_skin][:,c].mean()); sstd=max(float(source[src_skin][:,c].std()),1e-3)
+                gmean=float(changed[gen_skin][:,c].mean()); gstd=max(float(changed[gen_skin][:,c].std()),1e-3)
+                gain=min(max(sstd/gstd,0.85),1.18)
+                shift=float(np.clip(smean-gmean*gain,-10,10))
+                adjusted[...,c]=changed[...,c]*gain+shift
+            w=np.clip(apply_weight*strength*2,0,1)[...,None]
+            changed=changed+(adjusted-changed)*w
+        y,cb,cr=changed[...,0],changed[...,1]-128,changed[...,2]-128
+        corrected=np.stack((y+1.402*cr,y-.344136*cb-.714136*cr,y+1.772*cb),axis=-1)
+        pixels=np.clip(corrected,0,255)
+        m=alpha[...,None]
+        blended=arr*(1-m)+pixels*m
+        patch=Image.fromarray(np.clip(blended,0,255).astype(np.uint8))
     layer=region.original.copy(); layer.paste(patch,(x0,y0))
     return Image.composite(layer,region.original,region.mask)
 

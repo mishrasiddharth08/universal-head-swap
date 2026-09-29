@@ -166,7 +166,8 @@ class GeometryTests(unittest.TestCase):
         uncorrected=core.composite_region(generated,region,0)
         after=np.abs(np.asarray(result,dtype=float)[60,50]-np.asarray(original,dtype=float)[60,50]).sum()
         self.assertLess(after,before)
-        self.assertEqual(result.getpixel((50,15)),uncorrected.getpixel((50,15)))
+        # Continuous alpha blending may shift non-skin pixels by at most 1 level.
+        self.assertLessEqual(sum(abs(a-b) for a,b in zip(result.getpixel((50,15)),uncorrected.getpixel((50,15)))),2)
         self.assertEqual(result.getpixel((0,0)),original.getpixel((0,0)))
     def test_automatic_mask_preserves_original_neck_and_shoulders(self):
         region=core.build_region(self.im,self.pose,0.3,0.08)
