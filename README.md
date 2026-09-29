@@ -2,6 +2,8 @@
 
 ![Universal Head Swap — three engines, one Generate button](docs/img/hero.svg)
 
+![Extension overview — panel, routes and safeguards](docs/img/overview.svg)
+
 **Head swapping in Forge: FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 use BFS + references; Z-Image uses character-LoRA inpainting. The loaded engine selects the route.**
 
 [Installation](#beginner-installation) · [Model files](#model-files) · [Step-by-step usage](#step-by-step-usage) · [UI tour](#ui-tour) · [Latest update](#latest-update) · [Testing status](#features-and-testing-status)
