@@ -54,7 +54,7 @@ DEFAULTS.update(qwen_detail_crop=True,auto_model_adapter=True,enable=False,heads
     tiny_head_boost=False,strict_adapter=True,color_match=0.35,cache_encodes=True,removal_priority=True,
     match_sharpness=True,geometry_match=True,quality_strict=False,keep_original_canvas=True,
     identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5,
-    zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='SAM3 (optional)',sam3_checkpoint='',
+    zimage_variant='Turbo',zimage_denoise=0.35,zimage_mask_source='SAM3 (optional)',sam3_checkpoint='',
     sam3_device='Auto (detected)',sam3_quantization='Auto (detected)',cleanup_mask=None)
 DEFAULTS.update({k:[] for k in CATEGORIES})
 DEFAULTS.update({'ban_'+k:'Remove' for k in APPEARANCE})
