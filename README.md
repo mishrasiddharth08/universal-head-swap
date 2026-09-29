@@ -1,5 +1,7 @@
 # Universal Head Swap for Forge Neo
 
+![Universal Head Swap — three engines, one Generate button](docs/img/hero.svg)
+
 **Head swapping in Forge: FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 use BFS + references; Z-Image uses character-LoRA inpainting. The loaded engine selects the route.**
 
 [Installation](#beginner-installation) · [Model files](#model-files) · [Step-by-step usage](#step-by-step-usage) · [UI tour](#ui-tour) · [Latest update](#latest-update) · [Testing status](#features-and-testing-status)
@@ -21,6 +23,8 @@ Automated and live results are recorded in [VALIDATION.md](VALIDATION.md). Prior
 **Qwen users must update both extensions and restart Forge.** An older Project Invisible Qwen engine bypasses Head Swap. See [the companion integration requirement](docs/QWEN21_INTEGRATION.md). Details: [change history](CHANGELOG.md).
 
 ## The idea
+
+![How the loaded engine picks the route](docs/img/engine-routes.svg)
 
 Use Forge's normal img2img tab, prompt, seed and **Generate** button.
 Special controls stay inside a compact, collapsed **Universal Head Swap** panel.

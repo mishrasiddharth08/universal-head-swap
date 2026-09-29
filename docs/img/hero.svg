@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 200" role="img" aria-labelledby="title desc" font-family="Segoe UI,Arial,sans-serif">
+<title id="title">Universal Head Swap — banner</title>
+<desc id="desc">Banner: three engines, one Generate button. FLUX.2 Klein, Qwen Image 2.1 and Z-Image Turbo routes inside Forge's img2img tab.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0d1117"/>
+    <stop offset="1" stop-color="#111a2b"/>
+  </linearGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#58a6ff"/>
+    <stop offset="1" stop-color="#3fb950"/>
+  </linearGradient>
+</defs>
+<rect width="960" height="200" rx="12" fill="url(#bg)" stroke="#30363d"/>
+<rect x="0" y="0" width="960" height="4" rx="2" fill="url(#accent)"/>
+<text x="40" y="62" font-size="34" font-weight="700" fill="#e6edf3">Universal Head Swap</text>
+<text x="40" y="92" font-size="15" fill="#8b949e">Head swapping inside Forge Neo — one panel, one Generate button</text>
+<text x="40" y="116" font-size="13" fill="#58a6ff">FLUX.2 Klein 4B/9B</text>
+<text x="220" y="116" font-size="13" fill="#8b949e">BFS + reference latents</text>
+<text x="40" y="140" font-size="13" fill="#3fb950">Qwen Image Edit 2.1</text>
+<text x="220" y="140" font-size="13" fill="#8b949e">Dedicated Project Invisible bridge</text>
+<text x="40" y="164" font-size="13" fill="#f78166">Z-Image Turbo / Base</text>
+<text x="220" y="164" font-size="13" fill="#8b949e">Character-LoRA masked inpainting + optional SAM3</text>
+<g>
+  <rect x="620" y="52" width="300" height="112" rx="10" fill="#161b22" stroke="#30363d"/>
+  <text x="770" y="82" text-anchor="middle" font-size="13" fill="#e6edf3" font-weight="600">Loaded engine selects the route</text>
+  <text x="770" y="106" text-anchor="middle" font-size="12" fill="#8b949e">No core edits · no config changes</text>
+  <text x="770" y="130" text-anchor="middle" font-size="12" fill="#8b949e">Delete the folder = 100% stock Forge</text>
+  <text x="770" y="152" text-anchor="middle" font-size="12" fill="#3fb950">✓ independent community extension</text>
+</g>
+</svg>
