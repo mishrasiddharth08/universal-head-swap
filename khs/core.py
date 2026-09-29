@@ -719,14 +719,17 @@ def composite_region(generated,region,color_match=0):
             neck=central&(yy>=bottom)&(yy<min(alpha.shape[0],bottom+.18*height))&(alpha<0.05)&skin(source)
             if jaw.sum()>20 and neck.sum()>20:
                 delta=np.median(source[neck],axis=0)-np.median(changed[jaw],axis=0)
-                delta=np.clip(delta,(-16,-10,-10),(16,10,10))*strength
+                # Measured exposure gaps can exceed 60 luminance points, so the
+                # seam correction needs full-range clamps to actually close.
+                delta=np.clip(delta,(-80,-40,-40),(80,40,40))*strength
                 selected=skin(changed)&(alpha>0.05)
                 weight=alpha[...,None]
                 changed[selected]+=delta*weight[selected]
         # 2) Global skin-tone transfer: match the generated skin's mean and
-        # contrast to the preserved body skin, per YCbCr channel, clamped so
-        # lighting structure survives. This is what removes the overall
-        # 'pasted head' tone difference, not just the seam.
+        # contrast to the preserved body skin, per YCbCr channel. Measured gaps
+        # can exceed 60 luminance points (different exposure between model
+        # output and input photo), so clamps must be generous or the correction
+        # stays cosmetic. Chroma stays tighter to avoid hue drift.
         src_skin=skin(source)&(alpha<=0.05); gen_skin=skin(changed)&(alpha>=0.65)
         if src_skin.sum()>60 and gen_skin.sum()>60:
             apply_weight=np.clip((skin(changed)&(alpha>0.05)).astype(np.float32)*alpha,0,1)
@@ -734,11 +737,22 @@ def composite_region(generated,region,color_match=0):
             for c in range(3):
                 smean=float(source[src_skin][:,c].mean()); sstd=max(float(source[src_skin][:,c].std()),1e-3)
                 gmean=float(changed[gen_skin][:,c].mean()); gstd=max(float(changed[gen_skin][:,c].std()),1e-3)
-                gain=min(max(sstd/gstd,0.85),1.18)
-                shift=float(np.clip(smean-gmean*gain,-10,10))
+                limit=60.0 if c==0 else 24.0          # luminance vs chroma clamps
+                gain=min(max(sstd/gstd,0.6),1.6)
+                shift=float(np.clip(smean-gmean*gain,-limit,limit))
                 adjusted[...,c]=changed[...,c]*gain+shift
             w=np.clip(apply_weight*strength*2,0,1)[...,None]
             changed=changed+(adjusted-changed)*w
+            # 3) Exposure harmonization: a gamma match between the generated
+            # skin histogram and the body skin removes residual brightness
+            # offsets a linear shift cannot reach (shadows vs highlights).
+            gen_vals=changed[...,0][gen_skin]; src_vals=source[...,0][src_skin]
+            gm=max(float(np.mean(gen_vals)),1.0); sm=max(float(np.mean(src_vals)),1.0)
+            gamma=float(np.clip(np.log(sm/255)/np.log(gm/255),0.6,1.6))
+            lum=np.clip(changed[...,0]/255,1e-4,1)
+            matched=np.power(lum,gamma)*255
+            w2=np.clip(apply_weight*strength*2,0,1)
+            changed[...,0]=changed[...,0]+(matched-changed[...,0])*w2
         y,cb,cr=changed[...,0],changed[...,1]-128,changed[...,2]-128
         corrected=np.stack((y+1.402*cr,y-.344136*cb-.714136*cr,y+1.772*cb),axis=-1)
         pixels=np.clip(corrected,0,255)
