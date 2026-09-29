@@ -140,13 +140,12 @@ def configure_inpaint(session):
         elif head_px>640: denoise=max(0.1,base-0.05)    # large head: keep identity
     else:
         feather=max(8,min(32,cw//48))
-    # Soft edges let Turbo/Base re-render cleanly into the surrounding skin and hair
-    # instead of stopping on a hard circle. The latent mask stays slightly tighter
-    # than the overlay mask so the outer feather is painted from well-denoised
-    # context rather than a half-strength latent.
-    soft=canvas.filter(ImageFilter.GaussianBlur(feather))
-    latent=soft.filter(ImageFilter.GaussianBlur(max(4,feather//2)))
-    settings=dict(image_mask=soft, latent_mask=latent,
+    # One blur source only: the inpaint mask stays crisp so the model regenerates
+    # a clean, fully-denoised head. The soft head/body transition is produced
+    # downstream by composite_region's feathered mask — feathering here too made
+    # the boundary ring half-denoised mush.
+    soft=canvas.filter(ImageFilter.GaussianBlur(4))
+    settings=dict(image_mask=soft, latent_mask=soft.copy(),
                   inpaint_full_res=False, inpainting_mask_invert=0,
                   inpainting_fill=1, mask_blur=0, mask_round=False,
                   denoising_strength=denoise)
@@ -159,7 +158,7 @@ def configure_inpaint(session):
         session.host.dynamic.edit=False
     session.analysis['native_inpaint']={'denoise':denoise,'base_denoise':base,
         'mask_source':session.cfg.get('zimage_mask_source','Face detector (fast)'),
-        'mask_feather_px':feather,'head_px':round(head_px) if head_px else None,
+        'mask_edge_px':4,'head_px':round(head_px) if head_px else None,
         'sampling_size':[cw,ch],'reference_encodes':0}
 
 

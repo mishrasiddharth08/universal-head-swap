@@ -122,74 +122,47 @@ class SAM3Masker:
             if quantization in ('Dynamic INT8 (CPU only)', 'INT8 weight-only', 'INT4 weight-only'):
                 # torchao quantizers manage their own weight dtypes.
                 pass
-            elif quantization == 'BFloat16' and cast:
-                print('[UniversalHeadSwap] BFloat16 SAM3 runs on GPU only; using full precision on CPU.')
-                cast(torch.float32)
             elif cast:
                 cast(torch.float32)
             return
-        if quantization in (None, '', 'Full precision (fp32)'):
+        if quantization in ('Dynamic INT8 (CPU only)', 'INT8 weight-only', 'INT4 weight-only'):
             return
-        try:
-            if quantization == 'Half (fp16)':
-                if not str(device).startswith('cuda'):
-                    raise RuntimeError('FP16 inference is GPU-only; use BFloat16 or fp32 on CPU.')
-                self.model.to(torch.float16)
-            elif quantization == 'BFloat16':
-                if str(device).startswith('cuda'):
-                    if not torch.cuda.is_bf16_supported():
-                        raise RuntimeError('This GPU has no BFloat16 support; use FP16 or fp32.')
-                    self.model.to(torch.bfloat16)
-                else:
-                    # CPU bf16 leaves float32 processor inputs/keys mixed and crashes
-                    # with 'mat1 and mat2 must have the same dtype'. Keep CPU fp32.
-                    print('[UniversalHeadSwap] BFloat16 SAM3 runs on GPU only; using full precision on CPU.')
+        if quantization in ('Half (fp16)', 'BFloat16', 'FP8 E4M3 (GPU)', 'FP8 E5M2 (GPU)'):
+            # SAM3's processor feeds Float inputs regardless of weight dtype; a
+            # global half/float8 cast always crashes inference with a dtype
+            # mismatch (including values persisted from older saved settings).
+            print('[UniversalHeadSwap] SAM3 ' + quantization + ' is not compatible with its processor; running full precision.')
+        # The checkpoint stores BFloat16 weights while the processor feeds Float
+        # inputs, so GPU inference also requires a fp32-normalized model.
+        if cast:
+            cast(torch.float32)
+        if quantization == 'Dynamic INT8 (CPU only)':
+            try:
+                from torchao.quantization import quantize_, int8_dynamic_activation_int8_weight_quant
+            except ImportError:
+                try:
+                    from torchao.quantization import quantize_, int8_dynamic_activation_int8_weight
+                    quantize_(self.model, int8_dynamic_activation_int8_weight())
                     return
-            elif quantization in ('FP8 E4M3 (GPU)', 'FP8 E5M2 (GPU)'):
-                if not str(device).startswith('cuda'):
-                    raise RuntimeError(quantization + ' needs a CUDA GPU; use BFloat16 or Dynamic INT8 on CPU.')
-                from torchao.float8 import convert_to_float8_training  # noqa: F401  # availability probe
-                del convert_to_float8_training
-                try:
-                    from torchao.quantization import quantize_, float8_dynamic_activation_float8_weight_quant
-                    quantize_(self.model, float8_dynamic_activation_float8_weight_quant())
-                except ImportError:
-                    try:
-                        from torchao.quantization import quantize_, float8_dynamic_activation_float8_weight
-                        quantize_(self.model, float8_dynamic_activation_float8_weight())
-                    except ImportError as exc:
-                        raise RuntimeError('FP8 needs torchao with float8 support: ' + str(exc)) from exc
-            elif quantization == 'Dynamic INT8 (CPU only)':
-                try:
-                    from torchao.quantization import quantize_, int8_dynamic_activation_int8_weight_quant
-                except ImportError:
-                    try:
-                        from torchao.quantization import quantize_, int8_dynamic_activation_int8_weight
-                        quantize_(self.model, int8_dynamic_activation_int8_weight())
-                        return
-                    except ImportError as exc:
-                        raise RuntimeError('Dynamic INT8 needs the torchao package on CPU: ' + str(exc)) from exc
-                quantize_(self.model, int8_dynamic_activation_int8_weight_quant())
-            elif quantization == 'INT8 weight-only':
-                from torchao.quantization import quantize_
-                try:
-                    from torchao.quantization import int8_weight_only_quant
-                    quantize_(self.model, int8_weight_only_quant())
-                except ImportError:
-                    from torchao.quantization import int8_weight_only
-                    quantize_(self.model, int8_weight_only())
-            elif quantization == 'INT4 weight-only':
-                from torchao.quantization import quantize_
-                try:
-                    from torchao.quantization import int4_weight_only_quant
-                    quantize_(self.model, int4_weight_only_quant())
-                except ImportError:
-                    from torchao.quantization import int4_weight_only
-                    quantize_(self.model, int4_weight_only())
-        except RuntimeError:
-            raise
-        except Exception as exc:
-            raise RuntimeError('SAM3 quantization (' + quantization + ') failed: ' + str(exc)) from exc
+                except ImportError as exc:
+                    raise RuntimeError('Dynamic INT8 needs the torchao package on CPU: ' + str(exc)) from exc
+            quantize_(self.model, int8_dynamic_activation_int8_weight_quant())
+        elif quantization == 'INT8 weight-only':
+            from torchao.quantization import quantize_
+            try:
+                from torchao.quantization import int8_weight_only_quant
+                quantize_(self.model, int8_weight_only_quant())
+            except ImportError:
+                from torchao.quantization import int8_weight_only
+                quantize_(self.model, int8_weight_only())
+        elif quantization == 'INT4 weight-only':
+            from torchao.quantization import quantize_
+            try:
+                from torchao.quantization import int4_weight_only_quant
+                quantize_(self.model, int4_weight_only_quant())
+            except ImportError:
+                from torchao.quantization import int4_weight_only
+                quantize_(self.model, int4_weight_only())
 
     @staticmethod
     def _inference_context():
