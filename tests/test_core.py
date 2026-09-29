@@ -259,8 +259,9 @@ class GeometryTests(unittest.TestCase):
         source={'box':(97,108.4,215,231)}
         _,report=core.align_protected_head(image,image,target,source)
         self.assertAlmostEqual(report['requested_scale_y'],161/122.6,places=3)
-        self.assertEqual(report['scale_y'],1.3)
-        self.assertLess(abs(122.6*report['scale_y']/161-1),0.02)
+        # New cap 1.45 covers elongated renders; 1.313x is applied in full.
+        self.assertAlmostEqual(report['scale_y'],1.313,places=2)
+        self.assertLess(abs(122.6*report['scale_y']/161-1),0.01)
 
     def test_protected_alignment_refuses_extreme_aspect_warp(self):
         image=Image.new('RGB',(320,320),'green')

@@ -673,7 +673,10 @@ def build_region(original,pose,padding=0.55,feather=0.08,mask=None,preserve_hair
         if preserve_hair:
             x0-=hw*0.08; x1+=hw*0.08; y0-=hh*0.10
         else:
-            x0-=hw*0.40; x1+=hw*0.40; y0-=hh*0.65
+            # Hair-replacement ellipse. A very tall expansion renders invented
+            # hair over empty background where it visibly 'hangs in air'; keep
+            # the coverage enough for a full hairstyle but anchored to the face.
+            x0-=hw*0.35; x1+=hw*0.35; y0-=hh*0.38
         mask=Image.new('L',original.size,0)
         ImageDraw.Draw(mask).ellipse((x0,y0,x1,jaw_end),fill=255)
     radius=max(0,round(min(hw,hh)*feather))
@@ -783,13 +786,13 @@ def align_protected_head(image,baseline,target_pose,generated_pose,preserve_aspe
     # For bounded aspect drift, restore the target face box on each axis and
     # pin the chin. Larger changes are rejected to avoid visible distortion.
     if aspect_gap>1.14 and not preserve_aspect:
-        if not 0.75<=width_scale<=1.30 or not 0.75<=height_scale<=1.34:
+        if not 0.70<=width_scale<=1.45 or not 0.70<=height_scale<=1.50:
             raise ValueError('Generated face proportions differ too much for safe alignment; choose another reference.')
-        # Case 02035 requests 1.313x vertically. Cap at 1.30x rather than
-        # rejecting it; this leaves about 1% residual height error without a
-        # larger identity-changing warp.
-        scale_x=max(0.80,min(1.25,width_scale))
-        scale_y=max(0.80,min(1.30,height_scale))
+        # Squeezed/elongated faces: rescale each axis to the measured target box
+        # and pin the chin. Caps allow meaningful correction of stretched
+        # renders while still rejecting unusable drift.
+        scale_x=max(0.70,min(1.40,width_scale))
+        scale_y=max(0.70,min(1.45,height_scale))
         mode='protected crop proportion alignment'
     else:
         scale=math.sqrt(height_scale*width_scale)
