@@ -109,7 +109,10 @@ class SAM3Masker:
                         raise RuntimeError('This GPU has no BFloat16 support; use FP16 or fp32.')
                     self.model.to(torch.bfloat16)
                 else:
-                    self.model.to(torch.bfloat16)  # CPU bf16 is supported on modern PyTorch
+                    # CPU bf16 leaves float32 processor inputs/keys mixed and crashes
+                    # with 'mat1 and mat2 must have the same dtype'. Keep CPU fp32.
+                    print('[UniversalHeadSwap] BFloat16 SAM3 runs on GPU only; using full precision on CPU.')
+                    return
             elif quantization in ('FP8 E4M3 (GPU)', 'FP8 E5M2 (GPU)'):
                 if not str(device).startswith('cuda'):
                     raise RuntimeError(quantization + ' needs a CUDA GPU; use BFloat16 or Dynamic INT8 on CPU.')

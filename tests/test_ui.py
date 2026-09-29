@@ -53,16 +53,16 @@ class UIConstructionTests(unittest.TestCase):
                     for quant in ('Q4_K_M.gguf','Q8_0.gguf','fp8.safetensors','int8_convrot.safetensors','bf16.safetensors'):
                         for preset,size,expected in [('qwen_image_2.1',None,'nested/bfs_head_v1_qwen_2.1'),('klein',9,'nested/bfs_head_v1_flux-klein_9b_step3500_rank128'),('klein',4,'nested/bfs_head_v1_flux-klein_4b')]:
                             checkpoint=f'{preset}-{size}b-{quant}'
-                            lora,variant,mask_source,sam3_path=callbacks[0](preset,checkpoint,True)
+                            lora,variant,mask_source,sam3_path,char=callbacks[0](preset,checkpoint,True)
                             self.assertEqual(lora['value'],expected)
                             self.assertEqual(variant.get('value','Turbo'),'Turbo')
-                    lora,_,_,_=callbacks[0]('klein','klein-9b',False)
+                    lora,_,_,_,_=callbacks[0]('klein','klein-9b',False)
                     self.assertNotIn('value',lora)
-                    lora,variant,_,_=callbacks[0]('zimage','Z-Image-Turbo-Q4.gguf',True)
+                    lora,variant,_,_,_=callbacks[0]('zimage','Z-Image-Turbo-Q4.gguf',True)
                     self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Turbo')
-                    lora,variant,_,_=callbacks[0]('zit','Z-Image-Turbo-BF16.safetensors',True)
+                    lora,variant,_,_,_=callbacks[0]('zit','Z-Image-Turbo-BF16.safetensors',True)
                     self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Turbo')
-                    lora,variant,_,_=callbacks[0]('zib','Z-Image-Base-BF16.safetensors',True)
+                    lora,variant,_,_,_=callbacks[0]('zib','Z-Image-Base-BF16.safetensors',True)
                     self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Base')
                 self.assertEqual(len(controls),len(core.ARG_KEYS))
                 self.assertEqual(len({id(c) for c in controls}),len(controls))

@@ -364,7 +364,7 @@ class UniversalHeadSwap(scripts.Script):
                     found=default_checkpoint()
                     return str(found) if found else None
                 except Exception: return None
-            SMART_OUTPUTS=[C['lora_dropdown'],C['zimage_variant'],C['zimage_mask_source'],C['sam3_checkpoint']]
+            SMART_OUTPUTS=[C['lora_dropdown'],C['zimage_variant'],C['zimage_mask_source'],C['sam3_checkpoint'],C['char_lora_name']]
             def sync_adapter(preset,checkpoint,automatic):
                 """Smart settings: choose the best setup for the selected model preset.
 
@@ -373,26 +373,37 @@ class UniversalHeadSwap(scripts.Script):
                 when a checkpoint exists under models/SAM 3.
                 """
                 if not automatic:
-                    return gr.update(),gr.update(),gr.update(),gr.update()
+                    return gr.update(),gr.update(),gr.update(),gr.update(),gr.update()
                 key=str(preset or '').lower(); checkpoint=str(checkpoint or '').lower()
                 flat=(key+' '+checkpoint).replace('-','').replace('_','').replace(' ','')
                 if 'zimage' in flat or 'zit' in key.split() or 'zib' in key.split():
                     variant='Base' if 'zib' in flat or 'base' in flat else 'Turbo'
                     found=sam3_installed()
+                    try:
+                        import networks
+                        networks.list_available_networks()
+                        entries=runtime.registry()
+                        zimage_names=[name for name,item in entries.items()
+                                      if core.adapter_family(name,getattr(item,'metadata',None))[0]=='zimage']
+                        # Prefer character-labelled adapters; fall back to any Z-Image adapter.
+                        preferred=[n for n in zimage_names if 'char' in n.lower()] or zimage_names
+                        char=preferred[0] if preferred else 'None (skip)'
+                    except Exception: char='None (skip)'
                     return (gr.update(choices=['Auto (match model)','Not used (Z-Image)']+names,value='Not used (Z-Image)'),
                             gr.update(value=variant),
                             gr.update(value='SAM3 (optional)') if found else gr.update(),
-                            gr.update(value=found) if found else gr.update())
+                            gr.update(value=found) if found else gr.update(),
+                            gr.update(choices=['None (skip)']+names,value=char))
                 if 'qwen' in flat: family,size='qwen',None
                 elif 'klein' in flat: family,size='klein',4 if '4b' in flat else 9
-                else: return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update()
+                else: return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update(),gr.update()
                 try:
                     import networks
                     networks.list_available_networks()
                     entries=runtime.registry()
                     choice=core.select_adapter({name:item.metadata for name,item in entries.items()},size,family)
-                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice),gr.update(),gr.update(),gr.update()
-                except Exception: return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update()
+                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice),gr.update(),gr.update(),gr.update(),gr.update()
+                except Exception: return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update(),gr.update()
             preset_component=self.components.get('forge_preset')
             checkpoint_component=self.components.get('checkpoint')
             try:

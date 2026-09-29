@@ -12,16 +12,15 @@ def model_directory():
     return Path(__file__).resolve().parents[3]/'models'/'sam3'
 
 def default_checkpoint():
-    """Find an installed SAM3 checkpoint: models/SAM 3/*, models/sam3/* (newest first)."""
+    """Find an installed SAM3 checkpoint: models/SAM 3 (incl. subfolders), models/sam3/* (newest first)."""
     folder=model_directory().parent
+    patterns=[]
     for name in ('SAM 3','sam3','SAM3'):
         candidate=folder/name
-        if not candidate.is_dir(): continue
-        files=sorted(candidate.glob('*.safetensors'))+sorted(candidate.glob('*.pt'))
-        files.sort(key=lambda f:f.stat().st_mtime,reverse=True)
-        for f in files:
-            if f.is_file() and f.stat().st_size>0: return f
-    return None
+        if candidate.is_dir(): patterns.extend(candidate.glob('**/*.safetensors')); patterns.extend(candidate.glob('**/*.pt'))
+    patterns=[f for f in patterns if f.is_file() and f.stat().st_size>0]
+    patterns.sort(key=lambda f:f.stat().st_mtime,reverse=True)
+    return patterns[0] if patterns else None
 
 def activate_runtime():
     runtime=model_directory()/'runtime'
