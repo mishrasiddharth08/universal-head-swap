@@ -120,7 +120,7 @@ def normalize(values=None):
         cfg['zimage_mask_source']='SAM3 (recommended)'
     if cfg['sam3_device'] not in ('Auto (detected)',):
         cfg['sam3_device']='Auto (detected)'
-    if cfg['sam3_quantization'] not in ('Auto (detected)','Full precision (fp32)','Half (fp16)','BFloat16','FP8 E4M3 (GPU)','FP8 E5M2 (GPU)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'):
+    if cfg['sam3_quantization'] not in ('Auto (detected)','Dynamic INT8 (CPU only)','INT8 weight-only','INT4 weight-only'):
         cfg['sam3_quantization']='Auto (detected)'
     for k in CATEGORIES:
         cfg[k]=[str(x) for x in cfg[k]] if isinstance(cfg[k],(tuple,list)) else ([str(cfg[k])] if cfg[k] else [])
