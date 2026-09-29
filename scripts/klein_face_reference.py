@@ -158,15 +158,11 @@ class UniversalHeadSwap(scripts.Script):
                             text('char_lora_trigger','Character trigger words')
                             check('strict_adapter','Check model compatibility')
                             refresh=gr.Button('Refresh LoRAs',size='sm')
-                    with gr.Accordion('Z-Image · character LoRA inpainting',open=False) as zimage_section:
-                        gr.Markdown('Choose a matching **Character LoRA** above. BFS is not used. Keep **Head only**. Turbo uses CFG 1; Forge controls the step count. Start around 8–9 steps for Turbo; Base needs its usual settings.')
+                    with gr.Accordion('Z-Image quick settings',open=False) as zimage_section:
+                        gr.Markdown('Most-used Z-Image controls. Full setup lives in the **Z-Image & SAM3** tab. A Z-Image **Character LoRA** is still selected in the Swap section above.')
                         with gr.Row():
                             drop('zimage_variant','Z-Image model type',['Turbo','Base'],scale=1)
                             slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05,scale=1)
-                        drop('zimage_mask_source','Z-Image mask',['SAM3 (recommended)','Face detector (fast)','SAM3 (optional)'])
-                        text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Auto-found in models/SAM 3 · or full path to a checkpoint')
-                        gr.Markdown('SAM3 device and precision are auto-detected from your hardware (GPU+BFloat16 on modern cards, CPU+fp32 otherwise). No manual setup needed.')
-                        gr.Markdown('A custom white-on-black mask takes priority. SAM3 needs its separately installed package and weights; it runs on CPU and is released before sampling. Dynamic INT8 runs on CPU only and needs torchao. Nothing downloads automatically.')
                     C['edit_scope']=gr.Radio(choices=[('Head only · keep scene','Protected head edit'),('Whole image · restyle','Full image edit')],value=defaults['edit_scope'],label='Edit area')
                     with gr.Row():
                         identity_setup=gr.Button('Identity only · clear style changes',variant='primary',scale=1)
@@ -190,7 +186,23 @@ class UniversalHeadSwap(scripts.Script):
                             check('auto_pick_best','Score references automatically')
                             check('rotate_top_only','Rotate only good matches')
                         check('seed_lock','Reuse the first seed for this target')
-                with gr.Tab('2 · Appearance',id='look'):
+                with gr.Tab('2 · Z-Image & SAM3',id='zimage'):
+                    gr.Markdown('Everything for the Z-Image route (ZIT / ZIB) and its optional SAM3 masking. SAM3 is **off by default** and only ever affects Z-Image; Klein and Qwen always use the face detector.')
+                    with gr.Row():
+                        drop('zimage_mask_source','Z-Image mask',['Face detector (fast)','SAM3 (optional)'])
+                        check('sam3_enabled','Enable SAM3 masks (Z-Image only)')
+                    text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Auto-found in models/SAM 3 · or full path to a checkpoint')
+                    gr.Markdown('SAM3 device and precision are auto-detected from your hardware; nothing to configure. A custom white-on-black mask always takes priority. When SAM3 is off or fails on a photo, the face-detector mask is used automatically â€” batches never abort.')
+                    with gr.Accordion('Model variant and identity',open=False):
+                        gr.Markdown('Turbo: CFG 1, negative prompts ignored, ~8â€“12 steps. Base: normal CFG and step count. Identity change 0.35 suits most photos; raise it if the face does not take the LoRA identity, lower it if features drift.')
+                    with gr.Accordion('SAM3 setup (one-time, optional)',open=False):
+                        from khs.sam3_setup import model_directory,download_once
+                        gr.Markdown('Weights live in **Forge/models/SAM 3/** (checkpoint, tokenizer and runtime are auto-detected in that folder and its subfolders). The setup button below installs the pinned runtime or fetches the official checkpoint with approved Hugging Face access.')
+                        spot_token=gr.Textbox(label='Hugging Face read token (optional; not saved)',type='password')
+                        setup_spots=gr.Button('Download / set up SAM3 once')
+                        setup_status=gr.Textbox(label='SAM3 setup status',interactive=False)
+                        setup_spots.click(download_once,inputs=spot_token,outputs=[setup_status])
+                with gr.Tab('3 · Appearance',id='look'):
                     with gr.Accordion('Remove small marks / jewelry · paint spots',open=False):
                         gr.Markdown('Upload the target photo, then paint **only** tattoo strokes, studs or small symbols white. CPU repair changes only painted pixels; no extra generation or VRAM. Clear the mask before switching photos. Large areas or marks crossing body edges need manual retouching.')
                         C['cleanup_mask']=gr.ImageEditor(label='Paint spots to remove',type='pil',image_mode='RGBA',height=300,
@@ -255,7 +267,7 @@ class UniversalHeadSwap(scripts.Script):
                         drop('neg_preset_dropdown','Negative preset',['None']+list(self.custom.get('negative_presets',{})))
                         check('neg_prompt_enable','Append additional negatives')
                         text('neg_prompt_text','Additional negative prompt',lines=3)
-                with gr.Tab('3 · Quality & mask',id='detail'):
+                with gr.Tab('4 · Quality & mask',id='detail'):
                     check('qwen_detail_crop','Qwen: focus generation on the head for more detail')
                     with gr.Row():
                         check('geometry_match','Check original head size and position')
@@ -301,7 +313,7 @@ class UniversalHeadSwap(scripts.Script):
                             drop('latent_kernel_size','Latent sharpening kernel',['3x3','5x5','7x7','9x9','15x15'])
                         check('blend_lora_boost','Boost adapter above instruction strength 50')
                         check('tiny_head_boost','Small-head adapter boost')
-                with gr.Tab('4 · Settings',id='settings'):
+                with gr.Tab('5 · Settings',id='settings'):
                     with gr.Accordion('Speed & memory',open=False):
                         with gr.Row():
                             drop('resolution_dropdown','Maximum reference / Z-Image crop side',['512','768','1024','1280','1536','2048'])
@@ -323,7 +335,7 @@ class UniversalHeadSwap(scripts.Script):
                         gr.Markdown('Includes character adapter settings. Images and masks are excluded. Review cleanup choices after loading older presets.')
                     with gr.Accordion('Generation report',open=False):
                         C['blend_preview']=gr.Textbox(label='Resolved next-image prompt',lines=9,interactive=False)
-                        gr.Markdown('Reads plain img2img. Seed −1 shows a labeled example. For Batch/Inpaint, the actual generation report is authoritative.')
+                        gr.Markdown('Reads plain img2img. Seed âˆ’1 shows a labeled example. For Batch/Inpaint, the actual generation report is authoritative.')
                         last_run=gr.Button('Show last generation report')
                         C['pos_status']=gr.Textbox(label='Last generation summary',lines=4,interactive=False)
                         analysis_json=gr.JSON(label='Detailed report')
@@ -474,7 +486,7 @@ class UniversalHeadSwap(scripts.Script):
                 mask_button.click(make_mask,inputs=[required[0],C['target_face'],C['crop_padding']],outputs=C['custom_mask'])
             else:
                 analyze.interactive=False
-                C['ratio_status'].value='Batch mode: results appear under Settings → Generation report.'
+                C['ratio_status'].value='Batch mode: results appear under Settings â†’ Generation report.'
         self.ui_controls=C
         return [C[k] for k in core.ARG_KEYS]
 

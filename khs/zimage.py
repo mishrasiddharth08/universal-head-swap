@@ -37,10 +37,13 @@ def has_custom_mask(value):
 
 
 def prepare_mask(image, pose, cfg, custom_mask=None):
-    """Use an explicit mask first; SAM3 stays optional and runs on CPU only."""
+    """Use an explicit mask first; SAM3 stays optional, Z-Image-only, opt-in."""
     global _MASKER, _MASKER_KEY
     if has_custom_mask(custom_mask):
         return custom_mask
+    if not cfg.get('sam3_enabled'):
+        # SAM3 is opt-in and Z-Image-only; other families use the face detector.
+        return None
     if not str(cfg.get('zimage_mask_source') or '').startswith('SAM3'):
         return None
     if not pose:
@@ -104,7 +107,7 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
 
 def protect_sam3_neck(region,pose,cfg):
     """Clamp automatic SAM3 feathering after blur; explicit masks stay user-controlled."""
-    if not str(cfg.get('zimage_mask_source') or '').startswith('SAM3') or has_custom_mask(cfg.get('custom_mask')) or not pose:
+    if not cfg.get('sam3_enabled') or not str(cfg.get('zimage_mask_source') or '').startswith('SAM3') or has_custom_mask(cfg.get('custom_mask')) or not pose:
         return region
     _,y0,_,y1=pose['box']; height=y1-y0
     arr=np.asarray(region.mask,dtype=np.float32).copy()
