@@ -210,6 +210,22 @@ class RuntimeTests(unittest.TestCase):
             model=NS(model_config=type(f'Flux2K{size}B',(),{})())
             self.assertEqual(runtime.model_family(model,NS(dynamic=NS(klein=False))),('klein',size))
 
+    def test_native_flux2_wins_over_shared_qwen_text_engine_and_stale_flags(self):
+        for size,hidden in ((4,3072),(9,4096)):
+            Flux2=type('Flux2',(),{})
+            model=Flux2()
+            model.model_config=type(f'Flux2K{size}B',(),{'unet_config':{'hidden_size':hidden}})()
+            model.text_processing_engine_qwen=object()
+            for edit,klein in ((False,False),(False,True),(True,False)):
+                with self.subTest(size=size,edit=edit,klein=klein):
+                    host=NS(dynamic=NS(edit=edit,klein=klein))
+                    self.assertEqual(runtime.model_family(model,host),('klein',size))
+
+    def test_qwen_text_only_remains_unsupported_even_with_stale_klein_flag(self):
+        model=NS(model_config=type('QwenImage',(),{})(),text_processing_engine_qwen=object())
+        host=NS(dynamic=NS(klein=True,edit=False))
+        self.assertEqual(runtime.model_family(model,host),(None,None))
+
     def test_zimage_architecture_wins_over_stale_flags(self):
         ZImage=type('ZImage',(),{})
         model=ZImage(); model.model_config=NS(unet_config={})

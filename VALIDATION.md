@@ -1,3 +1,16 @@
+## 3 October 2026 — live crop, skin and memory repairs
+
+- Full extension suite: **222 tests passed**. Qwen companion: **219 tests, one skipped**.
+- Fixed native Klein routing: diffusion architecture takes precedence over its shared Qwen text encoder. Four real INT8 Klein 9B runs covered both installed BFS variants. Protected pixels outside the head mask were unchanged; this is not proof of perfect identity.
+- Fixed Qwen's rectangular-crop/square-bucket squeeze. The companion preserves protected crop dimensions; UHS maps small rounding differences without stretching and rejects aspect differences that would discard over 15% of the canvas.
+- Skin matching now follows local original skin lighting and chroma, with a neck fallback. Generated fine detail, dark features and bright teeth/eye whites are protected. Synthetic tests cover tinted skin, backgrounds, local lighting, fine detail and exact mask-zero preservation.
+- Native Krea2 temporarily reserves 32% of GPU memory, capped at 12 GiB, while honoring a larger existing user reservation. The exact previous reserve is restored on success and failure. A real BF16 test stalled with nearly 32 GiB occupied; the reserved-memory retry completed. Live logs verify reserve increase and restoration.
+- Both Krea2 BFS versions were generated with the supplied K2 character adapter: all 256 character weights applied, zero skipped. Real BF16 and INT8 DiT generation completed with the BF16 Krea2 text encoder and Qwen VAE. Other quantizations remain unverified.
+- Five final, different images used BFS v1.1 + Krea2 character LoRA at 0.6 + INT8 DiT + native Forge Spectrum. First request: 28.31 s; remaining requests: 18.93–20.54 s. All five saved at 1024x1280 with zero changed pixels outside their protected masks.
+- **Visual limitations remain:** some face width/height checks failed, and exact identity, skin tone, expression and neck appearance are not guaranteed. Spectrum forecasts selected model steps and can affect quality; it remains controlled through Forge's existing Spectrum UI. Timings are one-machine measurements, not an isolated Spectrum speed comparison.
+- Real Qwen INT8 worker test completed under the simulated 8 GiB profile: BFS Alternative v1.1 + Qwen character adapter at 0.35 + six-step Turbo, 13 candidate headshots. Saved in 77.26 s; whole-GPU sampled peak 5,491 MiB, worker allocator peak 2,466 MiB allocated / 3,206 MiB reserved. Final measured height/width error: 0.48% / 5.09%. The allocator/profile was exercised on an RTX 5090, not physical 8 GiB hardware; this does not establish 6 GiB support or perfect visual quality.
+- Public documentation contains no private test photos. 6/8 GiB physical hardware, every parameter combination, every quantization and optional SAM3 inference are not established by these checks.
+
 ## 3 October 2026 — Krea2 integration contracts
 
 - Full extension suite: **201 tests and 6 subtests passed**, with 6 warnings.

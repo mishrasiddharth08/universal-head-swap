@@ -725,54 +725,91 @@ def composite_region(generated,region,color_match=0):
                 128+.5*r-.418688*g-.081312*b),axis=-1)
         source=ycbcr(base); changed=ycbcr(arr)
         def skin(value):
-            return ((value[...,0]>45)&(value[...,0]<235)&(value[...,1]>70)&(value[...,1]<140)
-                    &(value[...,2]>120)&(value[...,2]<190))
-        strength=float(color_match)
-        # 1) Jaw/neck seam: match the generated jaw to the preserved neck skin.
+            return ((value[...,0]>38)&(value[...,0]<242)&(value[...,1]>72)&(value[...,1]<138)
+                    &(value[...,2]>122)&(value[...,2]<196))
+        # Estimate the target only from preserved skin immediately below the
+        # protected face. Global outside-mask sampling can mistake wood, walls
+        # or hair for skin and push the generated face pink or orange.
         ys,xs=np.where(alpha>0.05)
         if len(xs):
             left,right,top,bottom=xs.min(),xs.max()+1,ys.min(),ys.max()+1
             yy,xx=np.ogrid[:alpha.shape[0],:alpha.shape[1]]
-            height=bottom-top
-            central=(xx>=left+.20*(right-left))&(xx<right-.20*(right-left))
-            jaw=central&(yy>=top+.58*height)&(yy<top+.82*height)&(alpha>0.65)&skin(changed)
-            neck=central&(yy>=bottom)&(yy<min(alpha.shape[0],bottom+.18*height))&(alpha<0.05)&skin(source)
-            if jaw.sum()>20 and neck.sum()>20:
-                delta=np.median(source[neck],axis=0)-np.median(changed[jaw],axis=0)
-                # Measured exposure gaps can exceed 60 luminance points, so the
-                # seam correction needs full-range clamps to actually close.
-                delta=np.clip(delta,(-80,-40,-40),(80,40,40))*strength
-                selected=skin(changed)&(alpha>0.05)
-                weight=alpha[...,None]
-                changed[selected]+=delta*weight[selected]
-        # 2) Global skin-tone transfer: match the generated skin's mean and
-        # contrast to the preserved body skin, per YCbCr channel. Measured gaps
-        # can exceed 60 luminance points (different exposure between model
-        # output and input photo), so clamps must be generous or the correction
-        # stays cosmetic. Chroma stays tighter to avoid hue drift.
-        src_skin=skin(source)&(alpha<=0.05); gen_skin=skin(changed)&(alpha>=0.65)
-        if src_skin.sum()>60 and gen_skin.sum()>60:
-            apply_weight=np.clip((skin(changed)&(alpha>0.05)).astype(np.float32)*alpha,0,1)
-            adjusted=np.empty_like(changed)
-            for c in range(3):
-                smean=float(source[src_skin][:,c].mean()); sstd=max(float(source[src_skin][:,c].std()),1e-3)
-                gmean=float(changed[gen_skin][:,c].mean()); gstd=max(float(changed[gen_skin][:,c].std()),1e-3)
-                limit=60.0 if c==0 else 24.0          # luminance vs chroma clamps
-                gain=min(max(sstd/gstd,0.6),1.6)
-                shift=float(np.clip(smean-gmean*gain,-limit,limit))
-                adjusted[...,c]=changed[...,c]*gain+shift
-            w=np.clip(apply_weight*strength*2,0,1)[...,None]
-            changed=changed+(adjusted-changed)*w
-            # 3) Exposure harmonization: a gamma match between the generated
-            # skin histogram and the body skin removes residual brightness
-            # offsets a linear shift cannot reach (shadows vs highlights).
-            gen_vals=changed[...,0][gen_skin]; src_vals=source[...,0][src_skin]
-            gm=max(float(np.mean(gen_vals)),1.0); sm=max(float(np.mean(src_vals)),1.0)
-            gamma=float(np.clip(np.log(sm/255)/np.log(gm/255),0.6,1.6))
-            lum=np.clip(changed[...,0]/255,1e-4,1)
-            matched=np.power(lum,gamma)*255
-            w2=np.clip(apply_weight*strength*2,0,1)
-            changed[...,0]=changed[...,0]+(matched-changed[...,0])*w2
+            height=max(1,bottom-top); width=max(1,right-left)
+            central=(xx>=left+.18*width)&(xx<right-.18*width)
+            neck=(central&(yy>=bottom)&(yy<min(alpha.shape[0],bottom+.38*height))
+                  &(alpha<0.03)&skin(source))
+            face=(central&(yy>=top+.22*height)&(yy<top+.86*height)
+                  &(alpha>0.70)&skin(changed))
+            source_face=(central&(yy>=top+.28*height)&(yy<top+.86*height)
+                         &(alpha>0.70)&skin(source))
+            def robust_stats(values):
+                if len(values)<48: return None
+                med=np.median(values,axis=0)
+                mad=np.median(np.abs(values-med),axis=0)
+                keep=np.all(np.abs(values-med)<=np.maximum((18,9,9),3.5*mad),axis=1)
+                values=values[keep]
+                if len(values)<32: return None
+                q25,q75=np.percentile(values,(25,75),axis=0)
+                return np.median(values,axis=0),np.maximum(q75-q25,1.0)
+            src_stats=robust_stats(source[neck]); source_face_stats=robust_stats(source[source_face])
+            gen_stats=robust_stats(changed[face])
+            if src_stats is not None and gen_stats is not None:
+                neck_med,neck_spread=src_stats; gmed,gspread=gen_stats
+                if source_face_stats is not None:
+                    smed,sspread=source_face_stats
+                else:
+                    smed,sspread=neck_med,neck_spread
+                # Keep local contrast and texture. Only exposure gets a bounded
+                # gain; chroma receives a single robust shift, avoiding patchy
+                # per-channel normalization across eyes, hair and highlights.
+                gain=float(np.clip(sspread[0]/gspread[0],0.88,1.14))
+                shift_y=float(np.clip(smed[0]-gmed[0]*gain,-42,42))
+                shifts=np.array((shift_y,*np.clip(smed[1:]-gmed[1:],-8,8)),dtype=np.float32)
+                adjusted=changed.copy(); adjusted[...,0]=changed[...,0]*gain
+                adjusted+=shifts
+                # The original face supplies the overall lighting target. Ease
+                # only the lower face toward the preserved neck so shadowed
+                # neck pixels cannot tint the whole forehead and cheeks.
+                jaw_delta=np.clip(neck_med-smed,(-14,-4,-4),(14,4,4))
+                jaw_weight=np.clip((yy-(top+.55*height))/(.28*height),0,1).astype(np.float32)
+                adjusted+=jaw_weight[...,None]*jaw_delta
+                if source_face_stats is not None:
+                    # Transfer only broad skin lighting/color, never original
+                    # facial features. One global median misses a flash-lit
+                    # cheek and leaves a yellow face against a pink neck.
+                    radius=max(2,round(min(width,height)*0.10))
+                    def smooth(values):
+                        pad=np.pad(values,((radius,radius),(radius,radius),(0,0)),mode='edge')
+                        integral=np.pad(pad,((1,0),(1,0),(0,0))).cumsum(0,dtype=np.float64).cumsum(1)
+                        n=2*radius+1
+                        return ((integral[n:,n:]-integral[:-n,n:]-integral[n:,:-n]+integral[:-n,:-n])/(n*n)).astype(np.float32)
+                    def lighting_field(values,median):
+                        valid=(skin(values)&(values[...,0]>median[0]*0.55)&(alpha>0.05)).astype(np.float32)
+                        packed=np.concatenate((values*valid[...,None],valid[...,None]),axis=-1)
+                        for _ in range(3): packed=smooth(packed)
+                        mass=packed[...,3:4]
+                        field=packed[...,:3]/np.maximum(mass,1e-5)
+                        return np.where(mass>0.12,field,median),mass
+                    source_field,source_mass=lighting_field(source,smed)
+                    generated_field,generated_mass=lighting_field(changed,gmed)
+                    local_shift=np.clip(source_field-generated_field,(-36,-18,-18),(36,18,18))
+                    reliable=(source_mass>0.12)&(generated_mass>0.12)
+                    adjusted=np.where(reliable,changed+local_shift,adjusted)
+                gen_skin=skin(changed)&(alpha>0.05)
+                # Fill small classification holes from highlights, makeup and
+                # compression before applying one smooth correction. Very dark
+                # eyes and hair remain gated out.
+                radius=max(1,round(min(alpha.shape)*0.012))
+                soft_skin=np.asarray(Image.fromarray(gen_skin.astype(np.uint8)*255,'L').filter(
+                    ImageFilter.GaussianBlur(radius)),dtype=np.float32)/255
+                chroma_distance=np.maximum(np.abs(changed[...,1]-gmed[1])/28,
+                                           np.abs(changed[...,2]-gmed[2])/28)
+                neutral_white=(changed[...,0]>180)&(np.abs(changed[...,1]-128)+np.abs(changed[...,2]-128)<18)
+                feature_gate=(changed[...,0]>45)&(changed[...,0]<245)&(chroma_distance<1.7)&~neutral_white
+                confidence=np.clip(soft_skin*1.5,0,1)*feature_gate
+                strength=float(np.clip(color_match,0,0.5)/0.5)
+                weight=(alpha*confidence*strength)[...,None]
+                changed=changed+(adjusted-changed)*weight
         y,cb,cr=changed[...,0],changed[...,1]-128,changed[...,2]-128
         corrected=np.stack((y+1.402*cr,y-.344136*cb-.714136*cr,y+1.772*cb),axis=-1)
         pixels=np.clip(corrected,0,255)

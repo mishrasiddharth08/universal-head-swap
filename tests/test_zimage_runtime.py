@@ -14,6 +14,36 @@ from khs import core,runtime
 
 
 class ZImageRuntimeTests(unittest.TestCase):
+    def test_nested_base_and_turbo_character_adapters_resolve(self):
+        cases=(
+            ('ZIB CHAR LORA/rinmjq-woman-PlatinumEdition-FE-2026-ZIB','Tongyi-MAI/Z-Image'),
+            ('ZIT CHAR LORA/rinmjq-woman-OriginalLiteEdition-FE-2026-ZIT','Tongyi-MAI/Z-Image-Turbo'),
+        )
+        for key,base in cases:
+            basename=key.split('/')[-1]
+            entry=NS(alias=key,filename='G:/models/Lora/'+key+'.safetensors',
+                     metadata={'ss_base_model_version':base})
+            cfg=core.normalize({'char_lora_name':basename})
+            with self.subTest(key=key), patch('khs.runtime.registry',return_value={key:entry}):
+                self.assertEqual(runtime.resolve_adapters(cfg,None,'zimage'),('',key))
+
+    def test_base_and_turbo_character_plans_keep_strength_trigger_and_cfg(self):
+        trained='rinmjq woman'
+        metadata={'ss_tag_frequency':{'subject':{trained:7}},'ss_output_name':trained}
+        trigger=runtime.merge_character_trigger('',metadata)
+        cases=(
+            ('Base','ZIB CHAR LORA/rinmjq-woman-PlatinumEdition-FE-2026-ZIB',6.5),
+            ('Turbo','ZIT CHAR LORA/rinmjq-woman-OriginalLiteEdition-FE-2026-ZIT',1.0),
+        )
+        for variant,char,expected_cfg in cases:
+            cfg={'zimage_variant':variant,'char_lora_strength':0.61,'char_lora_trigger':trigger}
+            plan=core.build_zimage_plan('', '', cfg, 1, core.choices({}), char, host_cfg=6.5)
+            with self.subTest(variant=variant):
+                self.assertEqual(plan.cfg,expected_cfg)
+                self.assertEqual(plan.positive.count(trained),1)
+                self.assertIn(f'<lora:{char}:0.61>',plan.positive)
+                self.assertNotIn('bfs',plan.positive.lower())
+
     def fixtures(self,headshots=None,face=True):
         ZImage=type('ZImage',(),{})
         model=ZImage()

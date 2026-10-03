@@ -41,11 +41,14 @@ def model_family(model,host):
         return 'zimage',None
     if engine_name=='krea2' or 'krea2' in config_name or unet_config.get('image_model')=='krea2':
         return 'krea',None
+    # Native Flux2 also exposes the shared Qwen text engine. Detect its
+    # diffusion architecture first so that attribute cannot misclassify Klein
+    # or reject it when a stale edit flag is false.
+    if engine_name=='flux2' or 'flux2' in config_name:
+        return 'klein',model_size(model)
     if getattr(model,'text_processing_engine_qwen',None) is not None:
         if getattr(host.dynamic,'edit',False): return 'qwen',None
         return None,None
-    if engine_name=='flux2' or 'flux2k' in config_name:
-        return 'klein',model_size(model)
     if getattr(host.dynamic,'klein',False):
         return 'klein',model_size(model)
     return None,None
@@ -70,6 +73,34 @@ def device_policy(host):
             return 'cuda',total,free
         except Exception:
             return 'cpu',8*1024**3,2*1024**3
+
+KREA_RESERVED_VRAM_FRACTION=0.32
+KREA_RESERVED_VRAM_CAP=12*1024**3
+
+def reserve_krea_vram(memory):
+    """Raise Forge's shared-memory safety margin for native BF16 Krea only."""
+    total=float(getattr(memory,'total_vram',0))*1024*1024
+    if total<=0: return None
+    target=min(total*KREA_RESERVED_VRAM_FRACTION,KREA_RESERVED_VRAM_CAP)
+    if float(memory.extra_reserved_memory())>=target: return None
+    previous=memory.SETTING_RESERVED_VRAM
+    try:
+        memory.set_reserved_memory(1.0-target/total)
+    except Exception:
+        memory.SETTING_RESERVED_VRAM=previous
+        raise
+    return previous
+
+def restore_reserved_vram(memory,previous):
+    """Restore the exact Forge setting, including its -1 automatic sentinel."""
+    if previous==-1:
+        memory.SETTING_RESERVED_VRAM=previous
+        return
+    total=float(getattr(memory,'total_vram',0))*1024*1024
+    try:
+        if total>0: memory.set_reserved_memory(1.0-float(previous)/total)
+    finally:
+        memory.SETTING_RESERVED_VRAM=previous
 
 def registry():
     import networks
@@ -185,6 +216,7 @@ class Session:
     def __init__(self,p,cfg,owner,host,model=None):
         cfg=dict(cfg)
         self.p=p; self.cfg=cfg; self.owner=owner; self.host=host; self.model=p.sd_model if model is None else model
+        self._reserved_vram_previous=None
         self.family,self.family_size=model_family(self.model,host)
         if self.family is None:
             raise ValueError('Head Swap needs Flux.2 Klein, Qwen Image Edit, Krea2 or Z-Image. Load a supported checkpoint.')
@@ -210,6 +242,8 @@ class Session:
         self.old_dynamic=list(host.dynamic.ref_latents); self.old_referencing=host.dynamic.is_referencing
         self.old_edit=getattr(host.dynamic,'edit',None)
         self.closed=False
+        if self.family=='krea':
+            self._reserved_vram_previous=reserve_krea_vram(host.memory)
     def set_p(self,key,value):
         if key not in self.snap: self.snap[key]=(hasattr(self.p,key),getattr(self.p,key,None))
         setattr(self.p,key,value)
@@ -621,6 +655,9 @@ class Session:
                 try: self.host.extra_networks.deactivate(self.p,self.p.extra_network_data)
                 except Exception as e: print(f'[UniversalHeadSwap] Adapter cleanup warning after failure: {e}')
         finally:
+            if self._reserved_vram_previous is not None:
+                try: restore_reserved_vram(self.host.memory,self._reserved_vram_previous)
+                except Exception as e: print(f'[UniversalHeadSwap] Krea VRAM reservation restore warning: {e}')
             if self.key is not None: setattr(self.host.shared.opts,self.key,self.old_option)
             self.model.ref_latents=self.old_refs; self.model.ini_latent=self.old_ini
             self.host.dynamic.ref_latents=self.old_dynamic; self.host.dynamic.is_referencing=self.old_referencing

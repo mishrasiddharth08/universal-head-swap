@@ -3,6 +3,8 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 import json
 
+from PIL import Image, ImageOps
+
 from . import core, runtime
 
 BFS_QWEN21_TRIGGER = (
@@ -13,6 +15,20 @@ BFS_QWEN21_TRIGGER = (
     '<image2> supplies facial identity only; preserve hairstyle, hair length, hairline and '
     'outer hair silhouette from <image1> unless an explicit hairstyle instruction follows.'
 )
+
+
+def fit_generated(image, size):
+    """Map a companion output to the requested canvas without squeezing faces."""
+    image=image.convert('RGB')
+    if image.size==tuple(size): return image
+    source_aspect=image.width/image.height
+    target_aspect=size[0]/size[1]
+    agreement=min(source_aspect/target_aspect,target_aspect/source_aspect)
+    if agreement<0.85:
+        raise ValueError(
+            f'Qwen companion returned canvas {image.width}x{image.height}, but Head Swap expected '
+            f'{size[0]}x{size[1]}; refusing to crop away body or head anatomy. Update the Qwen companion and retry.')
+    return ImageOps.fit(image,tuple(size),Image.Resampling.LANCZOS,centering=(0.5,0.5))
 
 
 class ExternalSession(runtime.Session):
@@ -41,10 +57,15 @@ class ExternalSession(runtime.Session):
 
     def finish_image(self,image,index):
         if self.external_canvas_size:
-            from PIL import Image
-            frame=image.convert('RGB').resize(self.external_canvas_size,Image.Resampling.LANCZOS)
+            frame=fit_generated(image,self.external_canvas_size)
             frame=frame.crop(self.external_canvas_box).resize(self.original.size,Image.Resampling.LANCZOS)
             image,_=core.fit_canvas(frame.crop(self.region.box),self.canvas_size)
+        elif self.region:
+            # The companion rounds to one of Qwen's supported aspect buckets
+            # after this session prepares its crop. Center-crop that generated
+            # bucket back to our canvas; resizing it directly would squeeze a
+            # square output into a portrait crop and narrow every face.
+            image=fit_generated(image,self.canvas_size)
         return super().finish_image(image,index)
 
     def prepare(self, index, prompt, negative, seed, cfg_scale, turbo=False):

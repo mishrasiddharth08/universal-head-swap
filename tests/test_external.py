@@ -4,10 +4,35 @@ from unittest.mock import patch
 from PIL import Image
 import test_runtime as fixtures
 from khs import core, runtime
-from khs.external import BFS_QWEN21_TRIGGER, ExternalSession
+from khs.external import BFS_QWEN21_TRIGGER, ExternalSession, fit_generated
 
 
 class ExternalTests(unittest.TestCase):
+    def test_qwen_bucket_inverse_mapping_preserves_face_aspect(self):
+        from PIL import ImageDraw
+        square=Image.new('L',(256,256),0)
+        ImageDraw.Draw(square).ellipse((64,64,192,192),fill=255)
+        mapped=fit_generated(square.convert('RGB'),(224,256)).convert('L')
+        box=mapped.getbbox()
+        self.assertEqual(mapped.size,(224,256))
+        self.assertLessEqual(abs((box[2]-box[0])-(box[3]-box[1])),2)
+
+    def test_qwen_bucket_inverse_mapping_rejects_anatomy_losing_crop(self):
+        with self.assertRaisesRegex(ValueError,'refusing to crop away body or head anatomy'):
+            fit_generated(Image.new('RGB',(768,512)),(512,768))
+
+    def test_detail_finish_maps_actual_qwen_bucket_before_runtime_composite(self):
+        from PIL import ImageDraw
+        s=object.__new__(ExternalSession)
+        s.external_canvas_size=None; s.region=object(); s.canvas_size=(224,256)
+        square=Image.new('RGB',(256,256),'black')
+        ImageDraw.Draw(square).ellipse((64,64,192,192),fill='white')
+        with patch('khs.external.runtime.Session.finish_image',side_effect=lambda image,index:image):
+            mapped=s.finish_image(square,0).convert('L')
+        box=mapped.getbbox()
+        self.assertEqual(mapped.size,s.canvas_size)
+        self.assertLessEqual(abs((box[2]-box[0])-(box[3]-box[1])),2)
+
     def session(self, count=13):
         _,host,p,owner,cfg=fixtures.RuntimeTests().fixtures()
         cfg['headshots']=[Image.new('RGB',(256,256),(i*10,100,100)) for i in range(count)]

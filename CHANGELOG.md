@@ -1,3 +1,11 @@
+## 3 October 2026 — preserve crop geometry and local skin lighting
+
+- Removed avoidable Qwen crop squeezing and guarded unsafe canvas mismatches.
+- Replaced background-biased color matching with bounded local skin lighting/chroma guidance; preserved generated facial detail and bright eyes/teeth.
+- Repaired native Klein routing and added Krea2-only temporary working-VRAM reservation with exact restoration.
+- Expanded nested character/BFS adapter and Z-Image Base/Turbo regression coverage. Native Forge Spectrum remains available.
+- Live Krea2 BF16/INT8 character-LoRA tests completed; five final INT8 + Spectrum examples saved with exact outside-mask preservation. See VALIDATION.md for measured speed and remaining visual failures.
+
 ## 3 October 2026 — Krea2 BFS v1.1
 
 - Added native Krea2 routing and automatic selection of nested `bfs_head_swap_v1.1_krea2` LoRAs, keeping the existing five-tab interface and normal Forge generation flow.
