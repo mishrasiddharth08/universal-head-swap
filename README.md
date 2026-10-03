@@ -10,8 +10,11 @@
 
 ## Latest update
 
+- **Z-Image repair:** solid sampling mask, original soft paste-back and validated neck skin matching. Five Base + five Turbo outputs saved using nested character LoRAs; two independent proportion checks still need review. [Measured validation](VALIDATION.md).
+- **Krea2 tab:** a dedicated sixth tab preserves the existing style. Shared BFS and character-LoRA selectors remain in Swap.
+
 - **Krea2 + BFS v1.1:** native Forge Krea2 routing, source image first, headshot second, exact trained trigger and automatic nested-folder selection of `bfs_head_swap_v1.1_krea2.safetensors`.
-- **Krea2 setup and limits:** [read the guide](docs/KREA2.md). This route has not yet been GPU/visual validated in this repository.
+- **Krea2 live results:** five protected-head INT8 + native Spectrum images saved at 1024×1280. The first request took 28.31 seconds; four warm requests took 18.93–20.54 seconds. Pixels outside each mask were unchanged. Face geometry, skin matching and exact likeness still need visual review. [Setup and limits](docs/KREA2.md).
 
 - **Z-Image Turbo / Base:** native Forge inpainting, a matching character LoRA, protected head mask and the original output canvas. No BFS or reference-image encoding on this route.
 - **Optional SAM3:** local-only, CPU masking with a bounded cache; released before sampling. The fast face detector and custom masks need no SAM3 installation.
@@ -23,13 +26,15 @@
 - **Turbo and saving:** tested Qwen BFS + character + Viggle Turbo on INT8 ConvRot; the companion engine verifies saved files and reports their paths.
 - **Optional face-match checks:** bounded CPU checks appear in the generation report; review likeness visually too.
 
-Automated and live results are recorded in [VALIDATION.md](VALIDATION.md). Prior Qwen GPU testing used 13 headshots on an RTX 5090; it does not validate Z-Image, other quantizations or every GPU.
+Automated and live results are recorded in [VALIDATION.md](VALIDATION.md). Qwen and Krea2 trials used one RTX 5090. They do not validate every GPU, quantization, VRAM size or parameter combination.
 
 **Qwen users must update both extensions and restart Forge.** An older Project Invisible Qwen engine bypasses Head Swap. See [the companion integration requirement](docs/QWEN21_INTEGRATION.md). Details: [change history](CHANGELOG.md).
 
 ## The idea
 
 ![How the loaded engine picks the route](docs/img/engine-routes.svg)
+
+![Z-Image character LoRA inpainting](docs/img/zimage-inpainting.svg)
 
 Use Forge's normal img2img tab, prompt, seed and **Generate** button.
 Special controls stay inside a compact, collapsed **Universal Head Swap** panel.
@@ -40,9 +45,9 @@ This is an independent community extension, not an official product. Inspect eve
 
 - **FLUX.2 Klein 4B/9B:** inherited from the validated v6 codebase; reference latents, size-matched BFS adapters.
 - **Qwen 2.1:** dedicated Project Invisible bridge, target/reference ordering and protected editing verified with INT8 ConvRot, BFS, a character LoRA and Viggle Turbo. The older native Qwen route has separate reference handling.
-- **Krea2:** native Forge Krea2 route with the official BFS v1.1 model-only LoRA at strength 1, exact trigger, Euler/Simple, 8 steps, CFG 1 and denoise 1. Automated tests do not establish GPU or visual quality.
+- **Krea2:** native Forge route with BFS v1.1 at model strength 1, exact trigger, optional matching character LoRA and Forge Spectrum support. BF16 and INT8 DiT runs completed locally; five local INT8 + Spectrum results measured 28.31 seconds cold and 18.93–20.54 seconds warm at 1024×1280. Protected pixels were exact, while geometry, skin tone and identity quality were imperfect in some images.
 - **Z-Image:** native masked img2img with a character LoRA, bounded geometry correction and optional SAM3. Choose Turbo or Base to match your checkpoint; Turbo uses CFG 1.
-- **Organized controls:** five compact tabs, with headshots and LoRA selectors together in Swap.
+- **Organized controls:** six compact tabs, with headshots and LoRA selectors together in Swap.
 - **Memory:** device-aware probing (never assumes GPU 0), bounded reference budgets, one OOM retry, 256 MiB encode cache.
 - **Quantization:** all modern formats through Forge's own loaders; LoRAs stay on the runtime side path, never merged into quantized weights.
 - **No Forge core edits:** delete the extension folder and Forge is 100% stock.
@@ -78,7 +83,7 @@ BFS LoRAs are family-specific. Krea2 automatically selects the exact `bfs_head_s
 
 Everything lives inside Forge's normal img2img view. The extension adds a single collapsed **Universal Head Swap** accordion:
 
-![Five-tab Universal Head Swap guide — updated October 3, 2026](docs/img/ui-panel.svg)
+![Six-tab Universal Head Swap guide — updated October 3, 2026](docs/img/ui-panel.svg)
 
 Inside the panel:
 

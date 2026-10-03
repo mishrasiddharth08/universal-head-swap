@@ -171,6 +171,34 @@ class GeometryTests(unittest.TestCase):
         # Continuous alpha blending may shift non-skin pixels by at most 1 level.
         self.assertLessEqual(sum(abs(a-b) for a,b in zip(result.getpixel((50,15)),uncorrected.getpixel((50,15)))),2)
         self.assertEqual(result.getpixel((0,0)),original.getpixel((0,0)))
+    def test_skin_match_uses_source_face_when_neck_is_covered(self):
+        original=Image.new('RGB',(100,120),'navy')
+        ImageDraw.Draw(original).ellipse((15,5,85,82),fill=(220,180,160))
+        mask=Image.new('L',original.size,0)
+        ImageDraw.Draw(mask).ellipse((15,5,85,82),fill=255)
+        region=core.EditRegion(original,(0,0,100,120),mask,original)
+        generated=Image.new('RGB',original.size,(240,140,100))
+        before=core.composite_region(generated,region,0)
+        result=core.composite_region(generated,region,.5)
+        target=np.array(original.getpixel((50,50)),dtype=float)
+        error=lambda image:np.abs(np.array(image.getpixel((50,50)),dtype=float)-target).sum()
+        self.assertLess(error(result),error(before))
+        self.assertEqual(result.getpixel((50,100)),original.getpixel((50,100)))
+
+    def test_skin_match_anchors_chroma_to_neck_without_flattening_lighting(self):
+        original=Image.new('RGB',(100,120),(218,176,162))
+        ImageDraw.Draw(original).ellipse((15,5,85,82),fill=(225,180,150))
+        mask=Image.new('L',original.size,0)
+        ImageDraw.Draw(mask).ellipse((15,5,85,82),fill=255)
+        region=core.EditRegion(original,(0,0,100,120),mask,original)
+        generated=Image.new('RGB',original.size,(240,140,100))
+        result=core.composite_region(generated,region,.5)
+        chroma=lambda rgb:np.asarray(Image.new('RGB',(1,1),rgb).convert('YCbCr'))[0,0,1:].astype(float)
+        actual=chroma(result.getpixel((50,50)))
+        self.assertLess(np.abs(actual-chroma((218,176,162))).sum(),
+                        np.abs(chroma((240,140,100))-chroma((218,176,162))).sum())
+        self.assertEqual(result.getpixel((50,105)),original.getpixel((50,105)))
+
     def test_automatic_mask_preserves_original_neck_and_shoulders(self):
         region=core.build_region(self.im,self.pose,0.3,0.08)
         generated=Image.new('RGB',region.crop.size,'green')

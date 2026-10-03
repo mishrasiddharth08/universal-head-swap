@@ -541,20 +541,9 @@ class Session:
             baseline=self.original.crop(self.region.box)
             image=image.resize(self.canvas_size,Image.Resampling.LANCZOS).crop(self.canvas_box).resize(baseline.size,Image.Resampling.LANCZOS)
             target_pose=core.scale_pose(self.target_pose,baseline.size,baseline.size,(x0,y0))
-            # Composite with the union of the region mask and the exact mask the
-            # model regenerated (mapped from canvas coordinates back to the
-            # original), so the blended area always covers everything that was
-            # regenerated — no ghost edges from disagreement.
-            canvas_mask=getattr(self,'inpaint_mask_canvas',None)
-            if canvas_mask is not None and getattr(self,'family',None)=='zimage':
-                import numpy as _np
-                cx0,cy0,cx1,cy1=self.canvas_box
-                crop_mask=canvas_mask.crop(self.canvas_box).resize((x1-x0,y1-y0),Image.Resampling.LANCZOS)
-                full=Image.new('L',self.original.size,0)
-                full.paste(crop_mask,(x0,y0))
-                union=_np.maximum(_np.asarray(full,dtype=np.uint8),_np.asarray(self.region.mask,dtype=np.uint8))
-                self.region=core.EditRegion(self.region.original,self.region.box,
-                    Image.fromarray(union,'L'),baseline)
+            # Z-Image deliberately samples through a wider, solid mask. Keep the
+            # original soft region mask here so the extra generated edge is
+            # discarded instead of pasted back as a hard/noisy boundary.
         else:
             baseline=self.original
             if self.canvas_box:

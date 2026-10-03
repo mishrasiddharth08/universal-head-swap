@@ -1,3 +1,12 @@
+## 3 October 2026 — Z-Image inpainting boundaries and character adapters
+
+- Replaced soft sampling masks with solid expanded coverage and retained the original feathered paste-back mask.
+- Use valid source latents for partial denoise; random masked latents only at full denoise. Rejected patterned-face experiments after actual GPU checks.
+- Clarified Base/Turbo character-LoRA identity controls and preserved the existing five tabs and API order. Updated Krea2 guide and infographics with measured results and limits.
+- Fixed covered-neck fallback, rejected implausible skin samples and removed repeated feather attenuation from skin matching.
+- Added a dedicated Krea2 tab using the existing style and shared LoRA controls.
+- See VALIDATION.md for actual likeness, geometry and timing evidence.
+
 ## 3 October 2026 — preserve crop geometry and local skin lighting
 
 - Removed avoidable Qwen crop squeezing and guarded unsafe canvas mismatches.

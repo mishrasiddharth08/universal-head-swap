@@ -54,7 +54,7 @@ DEFAULTS.update(qwen_detail_crop=True,auto_model_adapter=True,enable=False,heads
     tiny_head_boost=False,strict_adapter=True,color_match=0.35,cache_encodes=True,removal_priority=True,
     match_sharpness=True,geometry_match=True,quality_strict=False,keep_original_canvas=True,
     identity_check=True,identity_threshold=0.363,geometry_correct=False,moire_enabled=False,moire_strength=0.5,
-    zimage_variant='Turbo',zimage_denoise=0.35,zimage_mask_source='SAM3 (optional)',sam3_checkpoint='',
+    zimage_variant='Turbo',zimage_denoise=0.65,zimage_mask_source='SAM3 (optional)',sam3_checkpoint='',
     sam3_enabled=False,
     sam3_device='Auto (detected)',sam3_quantization='Auto (detected)',cleanup_mask=None)
 DEFAULTS.update({k:[] for k in CATEGORIES})
@@ -753,6 +753,16 @@ def composite_region(generated,region,color_match=0):
                 return np.median(values,axis=0),np.maximum(q75-q25,1.0)
             src_stats=robust_stats(source[neck]); source_face_stats=robust_stats(source[source_face])
             gen_stats=robust_stats(changed[face])
+            # Covered/shadowed necks must not disable valid original-face color
+            # guidance. In that case retain face lighting without a jaw shift.
+            if src_stats is not None and source_face_stats is not None:
+                delta=np.abs(src_stats[0]-source_face_stats[0])
+                # Wood, walls and clothes can pass a broad skin classifier.
+                # Reject implausible nearby samples rather than tint the face.
+                if delta[0]>45 or np.any(delta[1:]>14):
+                    src_stats=None
+            if src_stats is None:
+                src_stats=source_face_stats
             if src_stats is not None and gen_stats is not None:
                 neck_med,neck_spread=src_stats; gmed,gspread=gen_stats
                 if source_face_stats is not None:
@@ -764,15 +774,15 @@ def composite_region(generated,region,color_match=0):
                 # per-channel normalization across eyes, hair and highlights.
                 gain=float(np.clip(sspread[0]/gspread[0],0.88,1.14))
                 shift_y=float(np.clip(smed[0]-gmed[0]*gain,-42,42))
-                shifts=np.array((shift_y,*np.clip(smed[1:]-gmed[1:],-8,8)),dtype=np.float32)
+                target_chroma=smed[1:]+np.clip(neck_med[1:]-smed[1:],-12,12)
+                shifts=np.array((shift_y,*np.clip(target_chroma-gmed[1:],-18,18)),dtype=np.float32)
                 adjusted=changed.copy(); adjusted[...,0]=changed[...,0]*gain
                 adjusted+=shifts
                 # The original face supplies the overall lighting target. Ease
                 # only the lower face toward the preserved neck so shadowed
                 # neck pixels cannot tint the whole forehead and cheeks.
-                jaw_delta=np.clip(neck_med-smed,(-14,-4,-4),(14,4,4))
+                jaw_delta=np.array((np.clip(neck_med[0]-smed[0],-14,14),0,0),dtype=np.float32)
                 jaw_weight=np.clip((yy-(top+.55*height))/(.28*height),0,1).astype(np.float32)
-                adjusted+=jaw_weight[...,None]*jaw_delta
                 if source_face_stats is not None:
                     # Transfer only broad skin lighting/color, never original
                     # facial features. One global median misses a flash-lit
@@ -792,9 +802,14 @@ def composite_region(generated,region,color_match=0):
                         return np.where(mass>0.12,field,median),mass
                     source_field,source_mass=lighting_field(source,smed)
                     generated_field,generated_mass=lighting_field(changed,gmed)
+                    # Preserve original broad lighting while anchoring skin
+                    # chroma to reliable untouched neck skin.
+                    source_field=source_field.copy()
+                    source_field[...,1:]+=target_chroma-smed[1:]
                     local_shift=np.clip(source_field-generated_field,(-36,-18,-18),(36,18,18))
                     reliable=(source_mass>0.12)&(generated_mass>0.12)
                     adjusted=np.where(reliable,changed+local_shift,adjusted)
+                adjusted+=jaw_weight[...,None]*jaw_delta
                 gen_skin=skin(changed)&(alpha>0.05)
                 # Fill small classification holes from highlights, makeup and
                 # compression before applying one smooth correction. Very dark
@@ -808,14 +823,14 @@ def composite_region(generated,region,color_match=0):
                 feature_gate=(changed[...,0]>45)&(changed[...,0]<245)&(chroma_distance<1.7)&~neutral_white
                 confidence=np.clip(soft_skin*1.5,0,1)*feature_gate
                 strength=float(np.clip(color_match,0,0.5)/0.5)
-                weight=(alpha*confidence*strength)[...,None]
+                # Final Image.composite owns feathering; repeated alpha here
+                # weakened correction precisely at the visible boundary.
+                weight=(confidence*strength)[...,None]
                 changed=changed+(adjusted-changed)*weight
         y,cb,cr=changed[...,0],changed[...,1]-128,changed[...,2]-128
         corrected=np.stack((y+1.402*cr,y-.344136*cb-.714136*cr,y+1.772*cb),axis=-1)
         pixels=np.clip(corrected,0,255)
-        m=alpha[...,None]
-        blended=arr*(1-m)+pixels*m
-        patch=Image.fromarray(np.clip(blended,0,255).astype(np.uint8))
+        patch=Image.fromarray(np.clip(pixels,0,255).astype(np.uint8))
     layer=region.original.copy(); layer.paste(patch,(x0,y0))
     return Image.composite(layer,region.original,region.mask)
 

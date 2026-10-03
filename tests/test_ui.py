@@ -58,10 +58,16 @@ class UIConstructionTests(unittest.TestCase):
                             self.assertEqual(lora['value'],expected)
                             self.assertEqual(variant.get('value','Turbo'),'Turbo')
                             self.assertTrue(bfs_col['visible'])
+                            if preset in ('krea2','krea'):
+                                self.assertEqual(lora['label'],'Krea2 head-swap LoRA · BFS v1.1')
+                                self.assertEqual(char['label'],'Krea2 Character LoRA · optional, same family')
                     lora,*rest=callbacks[0]('klein','klein-9b',False)
                     self.assertNotIn('value',lora)
+                    self.assertEqual(lora['label'],'Klein head-swap LoRA · BFS')
                     lora,variant,_,_,char,bfs_col,zsec=callbacks[0]('zimage','Z-Image-Turbo-Q4.gguf',True)
                     self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Turbo')
+                    self.assertEqual(char['label'],'Matching Z-Image Character LoRA · required identity source')
+                    self.assertNotIn('visible',char)
                     self.assertFalse(bfs_col['visible']); self.assertTrue(zsec['visible'])
                     lora,variant,_,_,_,bfs_col,zsec=callbacks[0]('zit','Z-Image-Turbo-BF16.safetensors',True)
                     self.assertEqual(lora['value'],'Not used (Z-Image)'); self.assertEqual(variant['value'],'Turbo')
@@ -71,6 +77,15 @@ class UIConstructionTests(unittest.TestCase):
                 self.assertEqual(len(controls),len(core.ARG_KEYS))
                 self.assertEqual(len({id(c) for c in controls}),len(controls))
                 for c in controls: self.assertIsInstance(c,gr.components.Component)
+                self.assertIn('audit only',script.ui_controls['headshots'].label)
+                self.assertTrue(script.ui_controls['char_lora_name'].visible)
+                values=[str(getattr(block,'value','')) for block in demo.blocks.values()]
+                self.assertTrue(any('native **Spectrum**' in value for value in values))
+                self.assertTrue(any('headshots only audit similarity' in value for value in values))
+                labels=[getattr(block,'label',None) for block in demo.blocks.values()]
+                for tab in ('1 · Swap','2 · Z-Image & SAM3','3 · Appearance','4 · Quality & mask','5 · Settings','6 · Krea2'):
+                    self.assertIn(tab,labels)
+                self.assertNotIn('Krea2 · BFS v1.1 and native Spectrum',labels)
                 for key in ('geometry_match','match_sharpness','removal_priority','quality_strict','keep_original_canvas','zimage_variant','zimage_denoise','zimage_mask_source','sam3_checkpoint'):
                     self.assertTrue(controls[core.ARG_KEYS.index(key)].visible)
             ui.unload()

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" role="img" aria-labelledby="title desc" font-family="Segoe UI,Arial,sans-serif">
+<title id="title">Z-Image character LoRA inpainting</title><desc id="desc">Base and Turbo use matching character LoRAs. Solid model masks and soft final compositing preserve the original scene; likeness needs review.</desc>
+<rect width="960" height="480" rx="12" fill="#0d1117"/>
+<text x="32" y="48" font-size="28" font-weight="700" fill="#e6edf3">Z-Image · Base + Turbo character LoRAs</text>
+<text x="32" y="80" font-size="16" fill="#8b949e">Native Forge img2img · matching adapter · protected original scene</text>
+<g fill="#161b22" stroke="#30363d"><rect x="32" y="112" width="432" height="120" rx="10"/><rect x="496" y="112" width="432" height="120" rx="10"/><rect x="32" y="260" width="896" height="142" rx="10"/></g>
+<g font-size="18" fill="#58a6ff" font-weight="700"><text x="52" y="144">1 · Select identity</text><text x="516" y="144">2 · Generate a clean boundary</text><text x="52" y="294">3 · Review the actual output</text></g>
+<g font-size="15" fill="#e6edf3"><text x="52" y="174">Base model + Base character LoRA</text><text x="52" y="200">Turbo model + Turbo character LoRA</text><text x="516" y="174">Solid sampling mask with extra coverage</text><text x="516" y="200">Original soft mask for final blending</text><text x="52" y="324">Check face identity, skin lighting, hair edges, chin and neck.</text><text x="52" y="351">Headshots are audit references; the character LoRA supplies identity.</text><text x="52" y="378">Subfolders supported · no second diffusion model · SAM3 optional</text></g>
+<text x="32" y="442" font-size="14" fill="#8b949e">Start without Spectrum; compare before enabling it. Perfect likeness and every quantization are unverified.</text>
+</svg>

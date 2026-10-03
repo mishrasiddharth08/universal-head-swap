@@ -117,7 +117,7 @@ class UniversalHeadSwap(scripts.Script):
             self.components['target']=component; self.capture_target=False
 
     def ui(self,is_img2img):
-        C={}; defaults=core.DEFAULTS
+        C={}; defaults=dict(core.DEFAULTS)
         def check(key,label,**kw):
             C[key]=gr.Checkbox(label=label,value=bool(defaults[key]),**kw); return C[key]
         def slide(key,label,low,high,step,**kw):
@@ -139,7 +139,7 @@ class UniversalHeadSwap(scripts.Script):
 .uhs-panel button {border-radius:8px}
 .uhs-panel .prose p {margin:.25rem 0}
 </style>''')
-            gr.Markdown('Add the target in **img2img**, then press **Generate**. Klein / Qwen use headshots + matching BFS. **Z-Image uses a character LoRA**; headshots are optional quality references.')
+            gr.Markdown('Add the target in **img2img**, then press **Generate**. **Klein, Qwen and Krea2 use identity headshots + their matching BFS LoRA.** A same-family Character LoRA is optional there. **Z-Image identity comes from a matching Character LoRA instead of BFS**; its headshots are audit references only.')
             if BRIDGE_ERROR:
                 gr.Markdown('**Unavailable:** '+BRIDGE_ERROR); C['enable'].interactive=False
             if self.custom_error: gr.Markdown('**Custom preset warning:** '+self.custom_error)
@@ -147,11 +147,12 @@ class UniversalHeadSwap(scripts.Script):
                 with gr.Tab('1 · Swap',id='setup'):
                     with gr.Row():
                         with gr.Column(scale=1):
-                            C['headshots']=gr.Gallery(label='Headshots',columns=4,height=220,type='filepath',format='png',interactive=True,allow_preview=True)
-                    with gr.Column(scale=1) as bfs_column:
-                        drop('lora_dropdown','Head-swap LoRA (BFS)',['Auto (match model)']+names)
-                        check('auto_model_adapter','Match BFS to selected model automatically')
-                        drop('char_lora_name','Character LoRA (required for Z-Image)',['None (skip)']+names)
+                            C['headshots']=gr.Gallery(label='Identity headshots · Z-Image uses these for audit only',columns=4,height=220,type='filepath',format='png',interactive=True,allow_preview=True)
+                    with gr.Column(scale=1):
+                        with gr.Column() as bfs_column:
+                            drop('lora_dropdown','Head-swap model LoRA · BFS',['Auto (match model)']+names)
+                            check('auto_model_adapter','Automatically match BFS to loaded Klein / Qwen / Krea2 model')
+                        drop('char_lora_name','Character LoRA · optional with BFS; required for Z-Image',['None (skip)']+names)
                         with gr.Accordion('LoRA strengths and trigger',open=False):
                             slide('lora_strength','BFS strength',0.05,2,0.05)
                             slide('char_lora_strength','Character strength',-2,2,0.05)
@@ -159,7 +160,7 @@ class UniversalHeadSwap(scripts.Script):
                             check('strict_adapter','Check model compatibility')
                             refresh=gr.Button('Refresh LoRAs',size='sm')
                     with gr.Accordion('Z-Image quick settings',open=False) as zimage_section:
-                        gr.Markdown('Most-used Z-Image controls. Full setup lives in the **Z-Image & SAM3** tab. A Z-Image **Character LoRA** is still selected in the Swap section above.')
+                        gr.Markdown('Most-used Z-Image controls. Full setup lives in **Z-Image & SAM3**. Select a **matching Z-Image Character LoRA** above: it supplies the identity; BFS is unused and headshots only audit the result.')
                         with gr.Row():
                             drop('zimage_variant','Z-Image model type',['Turbo','Base'],scale=1)
                             slide('zimage_denoise','Z-Image identity change',0.1,1.0,0.05,scale=1)
@@ -187,14 +188,14 @@ class UniversalHeadSwap(scripts.Script):
                             check('rotate_top_only','Rotate only good matches')
                         check('seed_lock','Reuse the first seed for this target')
                 with gr.Tab('2 · Z-Image & SAM3',id='zimage'):
-                    gr.Markdown('Everything for the Z-Image route (ZIT / ZIB) and its optional SAM3 masking. SAM3 is **off by default** and only ever affects Z-Image; Klein and Qwen always use the face detector.')
+                    gr.Markdown('Z-Image (ZIT / ZIB) uses the **matching Character LoRA as its identity source**. BFS is unused; uploaded headshots only audit similarity. Keep **Head only** to preserve the scene. SAM3 is **off by default** and affects only Z-Image; other routes use the face detector.')
                     with gr.Row():
                         drop('zimage_mask_source','Z-Image mask',['Face detector (fast)','SAM3 (optional)'])
                         check('sam3_enabled','Enable SAM3 masks (Z-Image only)')
                     text('sam3_checkpoint','Local SAM3 checkpoint',placeholder='Auto-found in models/SAM 3 · or full path to a checkpoint')
                     gr.Markdown('SAM3 device and precision are auto-detected from your hardware; nothing to configure. A custom white-on-black mask always takes priority. When SAM3 is off or fails on a photo, the face-detector mask is used automatically â€” batches never abort.')
                     with gr.Accordion('Model variant and identity',open=False):
-                        gr.Markdown('Turbo: CFG 1, negative prompts ignored, ~8â€“12 steps. Base: normal CFG and step count. Identity change 0.35 suits most photos; raise it if the face does not take the LoRA identity, lower it if features drift.')
+                        gr.Markdown('Turbo: CFG 1 and negative prompts ignored. Base: normal CFG and step count. Denoise remains experimental; compare changes carefully and keep Head only when the surrounding picture must stay intact.')
                     with gr.Accordion('SAM3 setup (one-time, optional)',open=False):
                         from khs.sam3_setup import model_directory,download_once
                         gr.Markdown('Weights live in **Forge/models/SAM 3/** (checkpoint, tokenizer and runtime are auto-detected in that folder and its subfolders). The setup button below installs the pinned runtime or fetches the official checkpoint with approved Hugging Face access.')
@@ -340,6 +341,9 @@ class UniversalHeadSwap(scripts.Script):
                         C['pos_status']=gr.Textbox(label='Last generation summary',lines=4,interactive=False)
                         analysis_json=gr.JSON(label='Detailed report')
                         check('no_ref_diag','Diagnostic generation without references')
+                with gr.Tab('6 · Krea2',id='krea2'):
+                    gr.Markdown('Use a **Krea2 checkpoint** with the matching **BFS v1.1 head-swap LoRA**. Keep BFS strength at **1.0** and provide clear identity headshots. A same-family Krea2 Character LoRA is optional. Select both LoRAs in **1 · Swap**. For Krea2 Turbo, start with **Euler / Simple, 8 steps, CFG 1**; Raw needs its own settings.')
+                    gr.Markdown('Forge\'s native **Spectrum** remains available and can reduce model evaluations; compare speed and quality. Control Spectrum in Forge as usual. Use **Head only** when the surrounding picture must stay unchanged, then inspect hair, ears and neck before saving.')
             for key in core.ARG_KEYS:
                 if key not in C: C[key]=gr.Checkbox(value=bool(defaults.get(key)),visible=False,label='Legacy '+key)
             all_inputs=[C[k] for k in core.ARG_KEYS]; save_inputs=[C[k] for k in core.SAVE_KEYS]
@@ -388,17 +392,27 @@ class UniversalHeadSwap(scripts.Script):
                 flat=(key+' '+checkpoint).replace('-','').replace('_','').replace(' ','')
                 is_zimage='zimage' in flat or 'zit' in key.split() or 'zib' in key.split()
                 is_family='qwen' in flat or 'klein' in flat or 'krea2' in flat or key.strip()=='krea'
+                def labels(family):
+                    if family=='krea': return 'Krea2 head-swap LoRA · BFS v1.1','Krea2 Character LoRA · optional, same family'
+                    if family=='qwen': return 'Qwen head-swap LoRA · BFS','Qwen Character LoRA · optional, same family'
+                    if family=='klein': return 'Klein head-swap LoRA · BFS','Klein Character LoRA · optional, same family'
+                    if family=='zimage': return 'BFS LoRA · not used by Z-Image','Matching Z-Image Character LoRA · required identity source'
+                    return 'Head-swap model LoRA · BFS','Character LoRA · optional with BFS; required for Z-Image'
                 def visibility(zimage):
                     hide=gr.update(visible=not zimage)
                     show_z=gr.update(visible=zimage,open=zimage)
                     return hide,show_z
                 if not automatic:
                     if is_zimage:
-                        hide,show_z=visibility(True); return gr.update(),gr.update(),gr.update(),gr.update(),gr.update(),hide,show_z
-                    hide,show_z=visibility(False); return gr.update(),gr.update(),gr.update(),gr.update(),gr.update(),hide,show_z
+                        bfs_label,char_label=labels('zimage')
+                        hide,show_z=visibility(True); return gr.update(label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
+                    family='krea' if 'krea2' in flat or key.strip()=='krea' else 'qwen' if 'qwen' in flat else 'klein' if 'klein' in flat else None
+                    bfs_label,char_label=labels(family)
+                    hide,show_z=visibility(False); return gr.update(label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
                 key=str(preset or '').lower(); checkpoint=str(checkpoint or '').lower()
                 flat=(key+' '+checkpoint).replace('-','').replace('_','').replace(' ','')
                 if is_zimage:
+                    bfs_label,char_label=labels('zimage')
                     variant='Base' if 'zib' in flat or 'base' in flat else 'Turbo'
                     found=sam3_installed()
                     try:
@@ -412,28 +426,30 @@ class UniversalHeadSwap(scripts.Script):
                         char=preferred[0] if preferred else 'None (skip)'
                     except Exception: char='None (skip)'
                     hide,show_z=visibility(True)
-                    return (gr.update(choices=['Auto (match model)','Not used (Z-Image)']+names,value='Not used (Z-Image)'),
+                    return (gr.update(choices=['Auto (match model)','Not used (Z-Image)']+names,value='Not used (Z-Image)',label=bfs_label),
                             gr.update(value=variant),
                             gr.update(value='SAM3 (optional)') if found else gr.update(),
                             gr.update(value=found) if found else gr.update(),
-                            gr.update(choices=['None (skip)']+names,value=char),
+                            gr.update(choices=['None (skip)']+names,value=char,label=char_label),
                             hide,show_z)
                 if 'krea2' in flat or key.strip()=='krea': family,size='krea',None
                 elif 'qwen' in flat: family,size='qwen',None
                 elif 'klein' in flat: family,size='klein',4 if '4b' in flat else 9
                 else:
+                    bfs_label,char_label=labels(None)
                     hide,show_z=visibility(False)
-                    return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update(),gr.update(),hide,show_z
+                    return gr.update(value='Auto (match model)',label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
+                bfs_label,char_label=labels(family)
                 try:
                     import networks
                     networks.list_available_networks()
                     entries=runtime.registry()
                     choice=core.select_adapter({name:item.metadata for name,item in entries.items()},size,family)
                     hide,show_z=visibility(False)
-                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice),gr.update(),gr.update(),gr.update(),gr.update(),hide,show_z
+                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice,label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
                 except Exception:
                     hide,show_z=visibility(False)
-                    return gr.update(value='Auto (match model)'),gr.update(),gr.update(),gr.update(),gr.update(),hide,show_z
+                    return gr.update(value='Auto (match model)',label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
             preset_component=self.components.get('forge_preset')
             checkpoint_component=self.components.get('checkpoint')
             try:
@@ -498,7 +514,7 @@ class UniversalHeadSwap(scripts.Script):
             cfg=core.normalize(args); im=core.rgb_image(image)
             refs,labels=([],[])
             family,_=runtime.model_family(HOST.shared.sd_model,HOST)
-            if family is None: raise ValueError('Load Flux.2 Klein, Qwen Image Edit or Z-Image to check setup.')
+            if family is None: raise ValueError('Load Flux.2 Klein, Qwen Image Edit, Krea2 or Z-Image to check setup.')
             if family!='zimage' or cfg['headshots']: refs,labels=core.gallery_images(cfg['headshots'])
             fs,char=runtime.resolve_adapters(cfg,HOST.shared.sd_model,family)
             faces=self.analyzer.faces(im); index=cfg['target_face']-1
@@ -527,7 +543,8 @@ class UniversalHeadSwap(scripts.Script):
             display=('SEED-0 EXAMPLE (main seed is random)\n' if example else f'Seed {fixed}\n')+f'CFG {plan.cfg:g}; LoRA {plan.fs_strength:.2f}\n\n'+plan.positive+('\n\nNEGATIVE (INACTIVE: CFG 1.0)\n' if plan.cfg==1.0 else '\n\nNEGATIVE (ACTIVE)\n')+plan.negative
             if plan.notes: display+='\n\nNOTES\n'+'\n'.join(plan.notes)
             guidance_status='negative prompts OFF' if plan.cfg==1 else 'negative prompts active'
-            return display,f'{len(faces)} target faces; slot {slot+1}: {reason}; {guidance_status} (CFG {plan.cfg:g})',overlay,refs[slot],report
+            family_label={'klein':'Klein','qwen':'Qwen Image','krea':'Krea2'}.get(family,family)
+            return display,f'{family_label} + BFS; {len(faces)} target faces; slot {slot+1}: {reason}; {guidance_status} (CFG {plan.cfg:g})',overlay,refs[slot],report
         except Exception as e: raise gr.Error(str(e))
 
     def preview_zimage(self,im,pose,cfg,char,prompt,negative,seed,guidance):

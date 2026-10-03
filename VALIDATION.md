@@ -216,3 +216,21 @@ Restart Forge completely after the current batch finishes to load both updated e
 - Completed in 170.06 seconds. Whole GPU peaked at 5114 MiB; worker peaks were 2308 MiB allocated and 3034 MiB reserved. This is a 6GB-profile run on a larger GPU, not a physical 6GB-card benchmark or matched speed comparison.
 - Original canvas preserved: zero changed pixels outside the face mask or below the neck boundary. Output saved and visually inspected. Body marks remain outside a head-only mask; whole-image cleanup is a separate choice.
 - 152 head-swap tests + 174 local companion tests passed; public companion fix also passed its 20 focused worker tests. Live generation was an isolated integration probe, not a browser-driven run. No all-quantization or perfect-quality claim.
+
+## Z-Image solid-mask and skin matching validation — 3 October 2026
+
+- Final native Forge tests: the same five target photos for Base and Turbo, 13 audit references, protected head crop, 768 sampling cap, character strength 0.8, requested denoise 0.65 (small-head adjustment 0.70), color match 0.5, no post sharpening. Base requested 28 steps/CFG 4; Turbo 9 steps/CFG 1. Spectrum disabled for the final comparison.
+- Base character: `ZIB CHAR LORA/rinmjq-woman-PlatinumEdition-FE-2026-ZIB.safetensors`. Turbo character: `Z-Image Turbo CHAR LORA/rinmjq-woman-OriginalEdition-7E-2026-ZIT.safetensors`. Both were found in nested LoRA folders and applied through Forge. Earlier OriginalLite Turbo tests also completed.
+- Ten 1024×1280 outputs saved; zero changed pixels outside the protected mask and below its neck boundary. Solid expanded model masks are discarded outside the original soft paste-back mask.
+- Skin correction now validates neck samples, falls back to original-face lighting when neck skin is unavailable, anchors chroma to reliable neck skin and applies feathering once. It preserves natural lighting and excludes dark facial features and neutral highlights; it is not a guarantee of perfect skin matching.
+
+| Engine | First request | Warm requests | Median SFace cosine range | Independent geometry passes |
+|---|---:|---:|---:|---:|
+| Base | 28.19 s | 14.12–16.54 s | 0.3646–0.4834 | 4/5 |
+| Turbo | 18.60 s | 4.18–4.82 s | 0.3850–0.6126 | 4/5 |
+
+- CPU SFace threshold remained 0.363; cosine similarity is not an accuracy percentage. All ten final median scores crossed that threshold, but reference consistency and independent geometry still flagged images. Two turned-head examples failed the stricter geometry check. A face-box measurement excludes hair volume; review outputs at full size.
+- Rejected experiment: random masked latent at partial denoise produced patterned faces. Random latent is now used only at full denoise; partial denoise retains a valid image latent. A soft latent mask was replaced with binary expanded coverage to remove the noised edge ring.
+- Final tests ran on an RTX 5090 using BF16 Z-Image models; sampled whole-GPU peak was 25911 MiB. This is not a 6/8 GB hardware or all-quantization validation. The extension loads no second diffusion model or reference encoder.
+- Shared-compositor Krea2 regression: native BFS v1.1 plus K2 character LoRA and Spectrum completed after switching from Z-Image, in 63.34 seconds including loading. Outside-mask pixels were exact; geometry failed this probe. Earlier warm Krea timings are separate results, not a matched speed claim.
+- Local photos and identity embeddings remain outside the public repository. Local validation artifacts are `work/faceswap-intensive/zimage-final-report-identity.json` and the Base/Turbo comparison galleries in the companion workspace.

@@ -147,19 +147,20 @@ def configure_inpaint(session):
         elif head_px>640: denoise=max(0.1,base-0.05)    # large head: keep identity
     else:
         feather=max(8,min(32,cw//48))
-    # One blur source only: the inpaint mask stays crisp so the model regenerates
-    # a clean, fully-denoised head. The soft head/body transition is produced
-    # downstream by composite_region's feathered mask — feathering here too made
-    # the boundary ring half-denoised mush.
-    soft=canvas.filter(ImageFilter.GaussianBlur(4))
-    settings=dict(image_mask=soft, latent_mask=soft.copy(),
+    # The sampler mask must be solid. A soft latent mask mixes untouched source
+    # latent with noise and leaves a visible maze at the edge. Generate slightly
+    # beyond the final soft blend, then discard that extra coverage at paste-back.
+    expand=max(4,min(16,feather//2))
+    edit_mask=canvas.point(lambda value: 255 if value>=8 else 0).filter(
+        ImageFilter.MaxFilter(expand*2+1))
+    # Random latent is valid only for a full denoise. With partial denoise it is
+    # treated as a partly-clean image latent, so residual noise survives.
+    fill=2 if denoise>=0.995 else 1
+    settings=dict(image_mask=edit_mask, latent_mask=edit_mask.copy(),
                   inpaint_full_res=False, inpainting_mask_invert=0,
-                  inpainting_fill=1, mask_blur=0, mask_round=False,
+                  inpainting_fill=fill, mask_blur=0, mask_round=True,
                   denoising_strength=denoise)
-    # Remember exactly what the model was told to regenerate. The paste-back
-    # step composites with this same mask mapped to original coordinates, so
-    # the regenerated area and the blended area can never disagree.
-    session.inpaint_mask_canvas=soft
+    session.inpaint_mask_canvas=edit_mask
     for key,value in settings.items():
         session.set_p(key,value)
     for key in ('overlay_images','mask_for_overlay','paste_to','mask','nmask'):
@@ -169,7 +170,9 @@ def configure_inpaint(session):
         session.host.dynamic.edit=False
     session.analysis['native_inpaint']={'denoise':denoise,'base_denoise':base,
         'mask_source':session.cfg.get('zimage_mask_source','Face detector (fast)'),
-        'mask_edge_px':4,'head_px':round(head_px) if head_px else None,
+        'masked_content':'latent noise' if fill==2 else 'original latent',
+        'model_mask':'binary expanded','mask_expand_px':expand,
+        'head_px':round(head_px) if head_px else None,
         'sampling_size':[cw,ch],'reference_encodes':0}
 
 
