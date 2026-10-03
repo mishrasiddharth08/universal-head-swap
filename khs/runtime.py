@@ -28,7 +28,7 @@ def model_size(model):
 def model_family(model,host):
     """Detect the active model family from live engine state, not filenames alone.
 
-    Returns ('klein', size), ('qwen', None), or ('zimage', None). Qwen is detected from
+    Returns ('klein', size), ('qwen', None), ('krea', None), or ('zimage', None). Qwen is detected from
     dynamic_args.edit (set by Forge's loader for Qwen-Image-Edit checkpoints)
     plus the diffusion engine class; Klein from dynamic_args.klein.
     """
@@ -39,6 +39,8 @@ def model_family(model,host):
     unet_config=getattr(config,'unet_config',{}) if config is not None else {}
     if engine_name=='zimage' or config_name=='zimage' or unet_config.get('z_image_modulation',False):
         return 'zimage',None
+    if engine_name=='krea2' or 'krea2' in config_name or unet_config.get('image_model')=='krea2':
+        return 'krea',None
     if getattr(model,'text_processing_engine_qwen',None) is not None:
         if getattr(host.dynamic,'edit',False): return 'qwen',None
         return None,None
@@ -149,6 +151,9 @@ def token_counter(model):
     return lambda text:len(engine.tokenize([core.TOKEN.sub('',text)])[0])
 
 def option_key(opts,family='klein'):
+    if family=='krea':
+        if hasattr(opts,'krea2_do_reference'): return 'krea2_do_reference',True
+        raise RuntimeError('This Forge version exposes no supported Krea2 reference setting.')
     if family in ('qwen','zimage'):
         # Qwen-Image-Edit needs no reference toggle: dynamic_args.edit already
         # selects its reference path, and there is no Klein-style option.
@@ -182,7 +187,7 @@ class Session:
         self.p=p; self.cfg=cfg; self.owner=owner; self.host=host; self.model=p.sd_model if model is None else model
         self.family,self.family_size=model_family(self.model,host)
         if self.family is None:
-            raise ValueError('Head Swap needs Flux.2 Klein, Qwen Image Edit or Z-Image. Load a supported checkpoint.')
+            raise ValueError('Head Swap needs Flux.2 Klein, Qwen Image Edit, Krea2 or Z-Image. Load a supported checkpoint.')
         self.owner.last_report={'version':core.VERSION,'status':'Preparing current generation.','model_family':self.family,'model_size':self.family_size}
         self.error=None; self.cancelled=None; self.completed=[]; self.processing=None
         self.cache=core.BoundedCache(); self.hits=0; self.encodes=0
@@ -353,7 +358,8 @@ class Session:
                                            p.cfg_scale,token_counter(self.model),self.owned_aliases)
             else:
                 plan=core.build_plan(text,negative,cfg,p.all_seeds[i],self.owner.choices,self.fs,self.char,
-                                     p.cfg_scale,(self.target_pose or {}).get('head_px'),token_counter(self.model),self.owned_aliases,self.target_location)
+                                     p.cfg_scale,(self.target_pose or {}).get('head_px'),token_counter(self.model),self.owned_aliases,self.target_location,
+                                     weighted=self.family!='krea',family=self.family)
             if qwen_delta:
                 # Forge's Qwen engine numbers the target image as Picture 0 and
                 # prepends its own image prompts; shift the plan's references.
@@ -368,7 +374,7 @@ class Session:
         print(f'[UniversalHeadSwap] CFG {self.plans[0].cfg:g}; negative guidance '+('active' if active else advice))
         adapter_label=self.char if self.family=='zimage' else self.fs
         p.extra_generation_params['Universal Head Swap']=f'{core.VERSION} | {self.family} | {cfg["edit_scope"]} | {adapter_label}'
-        p.extra_generation_params['Klein settings']=json.dumps({k:cfg[k] for k in core.SAVE_KEYS},ensure_ascii=False,separators=(',',':'))
+        p.extra_generation_params[('Krea2' if self.family=='krea' else 'Klein')+' settings']=json.dumps({k:cfg[k] for k in core.SAVE_KEYS},ensure_ascii=False,separators=(',',':'))
         if self.region or self.canvas_box: p.extra_generation_params['Klein output size']=f'{self.original.width}x{self.original.height}'
     def _cancel_check(self):
         if self.host.shared.state.interrupted or self.host.shared.state.stopping_generation:
@@ -402,18 +408,18 @@ class Session:
         if cached is not None: self.hits+=1; return cached
         array=np.moveaxis(np.asarray(im,dtype=np.float32)/255,2,0).copy()
         tensor=h.torch.from_numpy(array).unsqueeze(0)
-        if self.family!='qwen': tensor=tensor.to(device=h.devices.device)
+        if self.family not in ('qwen','krea'): tensor=tensor.to(device=h.devices.device)
         # Capture the reference from Forge itself (correct VAE scaling) in a temporary list.
         saved_refs=self.model.ref_latents; saved_ini=self.model.ini_latent
         previous=h.dynamic.is_referencing
         saved_edit=getattr(h.dynamic,'edit',None)
         self.model.ref_latents=[]
         try:
-            if self.family=='qwen':
+            if self.family in ('qwen','krea'):
                 # Qwen-Image-Edit consumes pixel-space start images appended to
                 # model.ref_latents by its own encode_first_stage; no is_referencing
                 # VAE encode happens here. Keep dynamic_args.edit enabled.
-                if saved_edit is not None: h.dynamic.edit=True
+                if self.family=='qwen' and saved_edit is not None: h.dynamic.edit=True
                 self.model.ref_latents=[tensor.movedim(1,-1).contiguous().cpu()]
                 self.encodes+=1
                 if self.cfg['cache_encodes']:
@@ -469,7 +475,7 @@ class Session:
                 mean=latent.float().mean(dim=(-2,-1),keepdim=True); std=latent.float().std(dim=(-2,-1),keepdim=True).clamp_min(1e-6)
                 latents[1]=enhanced.clamp(mean-4*std,mean+4*std).to(latent.dtype)
         self._cancel_check()
-        if self.family=='qwen':
+        if self.family in ('qwen','krea'):
             # Qwen-Image-Edit: keep the pixel-space target in ini_latent (Forge
             # prepends it as Picture 0 itself) and hand over only the headshot.
             self.model.ref_latents=[latents[1]]; self.model.ini_latent=latents[0]
@@ -477,16 +483,17 @@ class Session:
             self.model.ref_latents=latents; self.model.ini_latent=None
         h.dynamic.ref_latents=[]
         p.clear_prompt_cache()
-        p.extra_generation_params['Klein reference']=f'slot {selected+1}: {self.labels[selected]} | {reason}'
+        label='Krea2' if self.family=='krea' else 'Klein'
+        p.extra_generation_params[label+' reference']=f'slot {selected+1}: {self.labels[selected]} | {reason}'
         self.selected_ref=selected
-        p.extra_generation_params['Klein reference dimensions']=' + '.join(f'{im.width}x{im.height}' for im in pair)
-        p.extra_generation_params['Klein reference fingerprints']=','.join(core.image_hash(im)[:16] for im in (self.original,self.refs[selected]))
-        p.extra_generation_params['Klein resolved choices']=json.dumps(self.plans[index].choices,ensure_ascii=False)
+        p.extra_generation_params[label+' reference dimensions']=' + '.join(f'{im.width}x{im.height}' for im in pair)
+        p.extra_generation_params[label+' reference fingerprints']=','.join(core.image_hash(im)[:16] for im in (self.original,self.refs[selected]))
+        p.extra_generation_params[label+' resolved choices']=json.dumps(self.plans[index].choices,ensure_ascii=False)
         report={'version':core.VERSION,'image':index+1,'selected_slot':selected+1,'reason':reason,'analysis':self.analysis,
             'plan':self.plans[index].report(),'encoded_sizes':[im.size for im in pair],'encode_cache_hits':self.hits,
             'vae_encodes':self.encodes,'memory_retry':bool(retries),'crop_box':self.region.box if self.region else None}
         self.owner.last_report=report
-        h.shared.state.textinfo=f'Klein: reference {selected+1}/{len(self.refs)}; {reason}; {self.hits} cached encodes reused'
+        h.shared.state.textinfo=f'{label}: reference {selected+1}/{len(self.refs)}; {reason}; {self.hits} cached encodes reused'
         print('[UniversalHeadSwap] '+h.shared.state.textinfo)
     def finish_image(self,image,index):
         cfg=self.cfg
@@ -532,7 +539,7 @@ class Session:
                 if cfg['geometry_match'] and (self.region or cfg.get('geometry_correct',False)):
                     try:
                         if self.region:
-                            corrected,correction=core.align_protected_head(image,baseline,target_pose,generated_pose,preserve_aspect=self.family=='zimage')
+                            corrected,correction=core.align_protected_head(image,baseline,target_pose,generated_pose,preserve_aspect=self.family in ('zimage','krea'))
                         else:
                             corrected,correction=core.correct_head_scale(image,target_pose,generated_pose)
                         verified=core.nearest_face(self.owner.analyzer.faces(corrected),target_pose,corrected.size)
@@ -593,10 +600,11 @@ class Session:
         self.quality_history.append(quality)
         self.owner.last_report['quality']=quality
         self.owner.last_report['quality_history']=list(self.quality_history)
-        self.p.extra_generation_params['Klein quality']=json.dumps(quality,ensure_ascii=False,separators=(',',':'))
+        label='Krea2' if self.family=='krea' else 'Klein'
+        self.p.extra_generation_params[label+' quality']=json.dumps(quality,ensure_ascii=False,separators=(',',':'))
         if cfg['quality_strict'] and not acceptable:
             raise ValueError('Output failed the head-size / detail quality gate and was not saved. Inspect Show last generation report; adjust reference, sampling size or mask context.')
-        if not acceptable: self.host.shared.state.textinfo='Klein: output quality needs review; see Show last generation report.'
+        if not acceptable: self.host.shared.state.textinfo=f'{label}: output quality needs review; see Show last generation report.'
         auditor=getattr(self.owner,'auditor',None)
         if cfg['identity_check'] and auditor is not None and self.selected_ref is not None:
             from .identity import sample
@@ -639,7 +647,7 @@ def install_bridge(processing,host):
         # Guard before any mutation. Force mode cannot turn an unsupported model into a supported one.
         family,_=model_family(p.sd_model,host)
         if family is None:
-            raise ValueError('Head Swap is enabled, but the loaded model is not Flux.2 Klein, Qwen Image Edit or Z-Image. Disable it or load a supported checkpoint.')
+            raise ValueError('Head Swap is enabled, but the loaded model is not Flux.2 Klein, Qwen Image Edit, Krea2 or Z-Image. Disable it or load a supported checkpoint.')
         if not getattr(p,'init_images',None): raise ValueError('Head Swap needs an img2img target image.')
         if any(im is not p.init_images[0] and core.image_hash(im)!=core.image_hash(p.init_images[0]) for im in p.init_images[1:]):
             raise ValueError('Process one target per request. Use Forge Batch for separate target files.')

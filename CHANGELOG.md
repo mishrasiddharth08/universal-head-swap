@@ -1,3 +1,11 @@
+## 3 October 2026 — Krea2 BFS v1.1
+
+- Added native Krea2 routing and automatic selection of nested `bfs_head_swap_v1.1_krea2` LoRAs, keeping the existing five-tab interface and normal Forge generation flow.
+- Preserve the exact trained trigger once, source/reference ordering, Turbo CFG 1 and Raw guidance. Reuse protected masks, geometry checks, bounded CPU reference caching and state restoration.
+- Updated the Krea2 guide and four-route infographics; retained existing acknowledgments.
+- 201 automated tests and 6 subtests passed. Native Forge parsing matched 512 tensor keys across 256 adapter layers, with zero unused keys; native conditioning verified source-first ordering with one identity reference.
+- Live Krea2 generation and visual quality remain unverified: GPU training occupied the machine. These checks do not establish speed, VRAM requirements, all quantizations or 6/8 GB compatibility.
+
 ## 28 September 2026 — single blending and reviewed spot cleanup
 
 - Z-Image skips Forge's duplicate final overlay; the extension blends the protected mask once.

@@ -1,14 +1,17 @@
 # Universal Head Swap for Forge Neo
 
-![Universal Head Swap — three engines, one Generate button](docs/img/hero.svg)
+![Universal Head Swap — four engines, one Generate button](docs/img/hero.svg)
 
 ![Extension overview — panel, routes and safeguards](docs/img/overview.svg)
 
-**Head swapping in Forge: FLUX.2 Klein 4B/9B and Qwen Image Edit 2.1 use BFS + references; Z-Image uses character-LoRA inpainting. The loaded engine selects the route.**
+**Head swapping in Forge: FLUX.2 Klein, Qwen Image Edit 2.1 and Krea2 use BFS + references; Z-Image uses character-LoRA inpainting. The loaded engine selects the route.**
 
 [Installation](#beginner-installation) · [Model files](#model-files) · [Step-by-step usage](#step-by-step-usage) · [UI tour](#ui-tour) · [Latest update](#latest-update) · [Testing status](#features-and-testing-status)
 
 ## Latest update
+
+- **Krea2 + BFS v1.1:** native Forge Krea2 routing, source image first, headshot second, exact trained trigger and automatic nested-folder selection of `bfs_head_swap_v1.1_krea2.safetensors`.
+- **Krea2 setup and limits:** [read the guide](docs/KREA2.md). This route has not yet been GPU/visual validated in this repository.
 
 - **Z-Image Turbo / Base:** native Forge inpainting, a matching character LoRA, protected head mask and the original output canvas. No BFS or reference-image encoding on this route.
 - **Optional SAM3:** local-only, CPU masking with a bounded cache; released before sampling. The fast face detector and custom masks need no SAM3 installation.
@@ -30,15 +33,16 @@ Automated and live results are recorded in [VALIDATION.md](VALIDATION.md). Prior
 
 Use Forge's normal img2img tab, prompt, seed and **Generate** button.
 Special controls stay inside a compact, collapsed **Universal Head Swap** panel.
-The original picture provides the body and scene. Klein/Qwen use the selected headshot for identity. Z-Image gets identity from its character LoRA; uploaded headshots only support optional quality checks.
+The original picture provides the body and scene. Klein, Qwen and Krea2 use the selected headshot for identity. Z-Image gets identity from its character LoRA; uploaded headshots only support optional quality checks.
 This is an independent community extension, not an official product. Inspect every output at 100% zoom.
 
 ## Features and testing status
 
 - **FLUX.2 Klein 4B/9B:** inherited from the validated v6 codebase; reference latents, size-matched BFS adapters.
 - **Qwen 2.1:** dedicated Project Invisible bridge, target/reference ordering and protected editing verified with INT8 ConvRot, BFS, a character LoRA and Viggle Turbo. The older native Qwen route has separate reference handling.
+- **Krea2:** native Forge Krea2 route with the official BFS v1.1 model-only LoRA at strength 1, exact trigger, Euler/Simple, 8 steps, CFG 1 and denoise 1. Automated tests do not establish GPU or visual quality.
 - **Z-Image:** native masked img2img with a character LoRA, bounded geometry correction and optional SAM3. Choose Turbo or Base to match your checkpoint; Turbo uses CFG 1.
-- **Organized controls:** four compact tabs, with headshots and LoRA selectors together in Swap.
+- **Organized controls:** five compact tabs, with headshots and LoRA selectors together in Swap.
 - **Memory:** device-aware probing (never assumes GPU 0), bounded reference budgets, one OOM retry, 256 MiB encode cache.
 - **Quantization:** all modern formats through Forge's own loaders; LoRAs stay on the runtime side path, never merged into quantized weights.
 - **No Forge core edits:** delete the extension folder and Forge is 100% stock.
@@ -64,21 +68,22 @@ No promise is made for every VRAM size.
 
 | Component | Forge folder |
 |---|---|
-| FLUX.2 Klein 4B or 9B checkpoint, **or** Qwen Image Edit 2.1 checkpoint | `models/Stable-diffusion` |
-| Matching BFS LoRA for Klein/Qwen, or a character LoRA for Z-Image | `models/Lora` |
+| FLUX.2 Klein 4B/9B, Qwen Image Edit 2.1, Krea2, or Z-Image checkpoint | `models/Stable-diffusion` |
+| Matching BFS LoRA for Klein/Qwen/Krea2, or a character LoRA for Z-Image | `models/Lora` |
 | Optional character LoRA (same family as the checkpoint) | `models/Lora` |
 
-A Klein BFS LoRA is **not** interchangeable with Qwen — the extension enforces the family match and explains mismatches.
+BFS LoRAs are family-specific. Krea2 automatically selects the exact `bfs_head_swap_v1.1_krea2` name, including nested folders, and does not confuse it with FLUX.1 Krea Dev.
 
 ## UI tour
 
 Everything lives inside Forge's normal img2img view. The extension adds a single collapsed **Universal Head Swap** accordion:
 
-![Four-tab Universal Head Swap guide — updated September 28, 2026](docs/img/ui-panel.svg)
+![Five-tab Universal Head Swap guide — updated October 3, 2026](docs/img/ui-panel.svg)
 
 Inside the panel:
 
 - **Swap** — visible head-swap BFS and optional character LoRA selectors, strengths, trigger words, headshots, editing mode and reference selection.
+- **Z-Image & SAM3** — Z-Image-only inpainting and automatic SAM3 head masks. The separate spot-cleanup detector remains available for completed photos.
 - **Appearance** — cleanup, hairstyle, expression and prompt controls.
 - **Quality & mask** — proportions, detail, masks, finishing and optional enhancements.
 - **Settings** — memory limits, saved setups and generation reports.
@@ -87,11 +92,13 @@ Leave Auto enabled for matching BFS selection. Disable it to choose a head-swap 
 
 For Z-Image, choose a character LoRA in **Swap → Character LoRA**, open **Z-Image · character LoRA inpainting**, and keep **Head only**. [Full guide](docs/ZIMAGE.md).
 
+For Krea2, load a native Forge `Krea2` checkpoint/config, keep BFS on Auto, and use the exact prompt `head_swap: replace the head with the reference head.` [Full guide](docs/KREA2.md).
+
 ## Step-by-step usage
 
 ![Five-step workflow](docs/img/workflow.svg)
 
-1. **Load** — select a Klein 4B/9B or Qwen Image Edit 2.1 checkpoint and its matching BFS LoRA.
+1. **Load** — select a supported checkpoint. Auto chooses its matching BFS LoRA for Klein, Qwen or Krea2.
 2. **Target** — open **img2img** and upload the body/scene picture.
 3. **Headshots** — enable **Universal Head Swap** and upload 1–20 sharp identity headshots. Prefer similar pose and lighting.
 4. **Check setup** — one click shows the selected reference, edit area and fully resolved prompt before any generation.

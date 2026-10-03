@@ -242,6 +242,10 @@ def adapter_family(name,metadata=None):
     text=' '.join([str(name)]+[str(v) for k,v in (metadata or {}).items() if k in
                   ('ss_base_model_version','modelspec.architecture','modelspec.title','ss_sd_model_name','base_model')]).lower()
     size=re.search(r'(?:klein[\W_]*|flux2k?[^\s]*?)([49])b\b',text) or re.search(r'\b([49])b\b',text.replace('_',' '))
+    if re.search(r'flux[\W_]*1.*krea[\W_]*dev|krea[\W_]*dev.*flux[\W_]*1',text):
+        return 'other',None
+    if re.search(r'(?<![a-z0-9])krea[\W_]*2(?![a-z0-9])',text):
+        return 'krea',None
     if 'klein' in text or re.search(r'flux[\W_]*2k(?:[\W_]*[49]b)?\b',text):
         return 'klein',int(size.group(1)) if size else None
     if (re.search(r'\bz[\W_]*image(?:[\W_]*(?:turbo|base))?\b',text)
@@ -255,7 +259,7 @@ def adapter_family(name,metadata=None):
         return 'other',None
     return 'unknown',None
 
-FAMILY_LABEL={'klein':'Klein','qwen':'Qwen Image','zimage':'Z-Image'}
+FAMILY_LABEL={'klein':'Klein','qwen':'Qwen Image','zimage':'Z-Image','krea':'Krea2'}
 
 def compatible_adapter(name,size,metadata=None,strict=True,family='klein'):
     found_family,found=adapter_family(name,metadata)
@@ -273,8 +277,10 @@ def select_adapter(entries,size,family='klein'):
     for name,meta in entries.items():
         found_family,found=adapter_family(name,meta)
         if found_family!=family or not any(x in name.lower() for x in ('bfs','swap')): continue
+        if family=='krea' and not all(x in name.lower() for x in ('head','swap')): continue
         if family=='klein' and found!=size: continue
-        preferred=(('bfs_head_v1.1_alternative_qwen_2.1','bfs_head_v1.1_qwen_2.1','bfs_head_v1_qwen_2.1')
+        preferred=(('bfs_head_swap_v1.1_krea2','bfs_head_swap_v1_krea2') if family=='krea' else
+                   ('bfs_head_v1.1_alternative_qwen_2.1','bfs_head_v1.1_qwen_2.1','bfs_head_v1_qwen_2.1')
                    if family=='qwen' else (('bfs_head_v1_flux-klein_9b_step3500_rank128',) if size==9 else ()))
         basename=clean_name(name).split('/')[-1].lower()
         priority=len(preferred)-preferred.index(basename) if basename in preferred else 0
@@ -282,7 +288,7 @@ def select_adapter(entries,size,family='klein'):
     if not eligible:
         if family=='klein':
             raise ValueError('No verified matching face-swap adapter found. Load Klein and choose its 4B or 9B BFS LoRA.')
-        raise ValueError('No verified Qwen Image BFS face-swap adapter found in the LoRA registry. Select one manually.')
+        raise ValueError(f'No verified {FAMILY_LABEL.get(family,family)} BFS face-swap adapter found in the LoRA registry. Select one manually.')
     return sorted(eligible,key=lambda item:(-item[0],item[1].lower()))[0][1]
 
 def remap_picture_refs(text,delta):
@@ -352,6 +358,10 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
                 tag_family,_=adapter_family(name)
                 if tag_family in ('klein','qwen','other'):
                     raise ValueError(f'LoRA tag {clean_name(name)!r} does not match Z-Image. Remove the stale Klein/Qwen/SD tag or choose a Z-Image LoRA.')
+            elif family=='krea':
+                tag_family,_=adapter_family(name)
+                if tag_family in ('klein','qwen','zimage','other'):
+                    raise ValueError(f'LoRA tag {clean_name(name)!r} does not match Krea2. Remove the incompatible tag or choose a Krea2 LoRA.')
             extra_tags.append(m.group(0))
         return ''
     user_text=TOKEN.sub(separate,str(user or '')).strip()
@@ -389,6 +399,8 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
         else: extras.append(phrase)
     swap=cfg['blend_slider']>0 and (bool(user_text) or cfg['auto_prompt'])
     clauses=[]
+    if swap and family=='krea':
+        clauses.append('head_swap: replace the head with the reference head.')
     if cfg['removal_priority'] and any(v=='Remove' for v in appearances.values()):
         clauses.append('render a clean natural result throughout the masked area' if family=='zimage' else
                        'prioritize all removal requirements below over conflicting appearance requests; reconstruct clean natural skin instead of hiding marks with blur')
@@ -396,7 +408,7 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
         if family=='zimage':
             clauses.append('inpaint only the masked head as the character defined by the loaded character LoRA; preserve the source pose, expression, hairstyle, hairline, head silhouette, body, outfit, lighting and background')
             notes.append('Z-Image identity comes from the selected character LoRA; uploaded reference headshots are not used for conditioning.')
-        else:
+        elif family!='krea':
             clauses.append('head_swap: use Picture 1 as the target body and scene; replace its head with the facial identity, eye color and nose structure of Picture 2; preserve the pose, expression, outfit, lighting and background of Picture 1')
         if target_location and family!='zimage':
             clauses.append(f'apply the identity change only to the head centered {target_location[0]:.0%} from the left and {target_location[1]:.0%} from the top of Picture 1; preserve all other people')
@@ -423,13 +435,17 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
     tags=list(dict.fromkeys(extra_tags+([] if family=='zimage' else [f'<lora:{fs_name}:{strength:.2f}>'])))
     if char_name: tags.append(f'<lora:{char_name}:{cfg["char_lora_strength"]:.2f}>')
     trigger=str(cfg['char_lora_trigger'] or '').strip() if char_name else ''
-    core=[user_text,block] if cfg['blend_order']=='User prompt first' else [block,user_text]
-    positive=', '.join(x for x in [trigger,*core,*extras] if x)+' '+ ' '.join(tags)
+    prompt_core=([block,trigger,user_text] if family=='krea' else
+                 ([trigger,user_text,block] if cfg['blend_order']=='User prompt first' else [trigger,block,user_text]))
+    positive=', '.join(x for x in [*prompt_core,*extras] if x)+' '+ ' '.join(tags)
+    if family=='krea' and swap:
+        krea_trigger='head_swap: replace the head with the reference head.'
+        positive=krea_trigger+' '+re.sub(re.escape(krea_trigger),'',positive,flags=re.I).strip(' ,;')
     negative=str(negative or '')
     if cfg['neg_prompt_enable'] and cfg['neg_prompt_text']: negative=merge_negatives(negative,[cfg['neg_prompt_text'].strip()])
     turbo=family=='zimage' and cfg['zimage_variant']=='Turbo'
-    fast=turbo or 'Positive-only' in cfg['ban_channel']
-    guidance=float(host_cfg) if family=='zimage' and not turbo else (1.0 if fast else max(1.1,float(host_cfg)))
+    fast=turbo or 'Positive-only' in cfg['ban_channel'] or (family=='krea' and float(host_cfg)==1.0)
+    guidance=(1.0 if fast else float(host_cfg)) if family=='krea' else (float(host_cfg) if family=='zimage' and not turbo else (1.0 if fast else max(1.1,float(host_cfg))))
     if turbo:
         if float(host_cfg)!=1: notes.append(f'Z-Image Turbo requires CFG 1.0; changed Forge CFG {host_cfg:g} for this run.')
         notes.append('Z-Image Turbo keeps Forge steps unchanged; negative prompts are inactive in Turbo mode.')

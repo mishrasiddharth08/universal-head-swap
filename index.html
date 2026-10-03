@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Universal Head Swap — Klein, Qwen 2.1 and Z-Image for Forge Neo</title>
-<meta name="description" content="Head swapping for Klein, Qwen 2.1 and Z-Image in Forge Neo: automatic routing, protected masks and Forge-managed memory.">
+<title>Universal Head Swap — Klein, Qwen 2.1, Krea2 and Z-Image</title>
+<meta name="description" content="Head swapping for Klein, Qwen 2.1, Krea2 and Z-Image in Forge Neo with automatic routing and family-safe adapter selection.">
 <style>
 :root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--purple:#bc8cff}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -47,7 +47,7 @@ a{color:var(--accent)}
 
 <header>
   <h1>Universal Head Swap</h1>
-  <p class="tagline">One extension. Klein, Qwen 2.1 and Z-Image — automatic engine routing.</p>
+  <p class="tagline">One extension. Klein, Qwen 2.1, Krea2 and Z-Image — automatic engine routing.</p>
   <div class="badges">
     <span class="badge"><b>v1.0</b></span>
     <span class="badge">Forge Neo (classic)</span>
@@ -62,7 +62,8 @@ a{color:var(--accent)}
 <main class="wrap">
 
 <section class="grid">
-  <div class="card"><div class="icon">🔁</div><h3>Auto model switching</h3><p>Select the checkpoint in Forge's dropdown — Klein, Qwen 2.1 or Z-Image — and the extension switches its reference plumbing, LoRA matching and prompt formatting automatically. For Z-Image, choose Turbo or Base to match the checkpoint.</p></div>
+  <div class="card"><div class="icon">🔁</div><h3>Auto model switching</h3><p>Select Klein, Qwen 2.1, Krea2 or Z-Image in Forge. The extension chooses the matching route and LoRA family automatically.</p></div>
+  <div class="card"><div class="icon">✨</div><h3>Krea2 + BFS v1.1</h3><p>Uses the native Forge Krea2 engine, source first and headshot second. Auto selects <code>bfs_head_swap_v1.1_krea2</code>, including subfolders, without confusing FLUX.1 Krea Dev.</p></div>
   <div class="card"><div class="icon">🎭</div><h3>BFS head swap</h3><p>Use the original picture as the body/scene reference and a selected headshot as the identity reference, powered by Alissonerdx's BFS (Best Face Swap) LoRAs.</p></div>
   <div class="card"><div class="icon">🛡️</div><h3>Protected head edit</h3><p>Dedicated sampling canvas for the head region, composited back into the untouched original. Optional custom mask, feathering and crop padding.</p></div>
   <div class="card"><div class="icon">🧼</div><h3>Whole-body cleanup</h3><p>Removal policies for tattoos, henna, body ink, piercings, earrings, jewelry, forehead marks and cross symbols — resolved in one deterministic prompt plan.</p></div>
@@ -74,37 +75,37 @@ a{color:var(--accent)}
 
 <h2>How auto-switching works</h2>
 <table>
-  <tr><th></th><th>FLUX.2 Klein 4B / 9B</th><th>Qwen Image Edit 2.1</th><th>Z-Image Turbo / Base</th></tr>
-  <tr><td>Detection</td><td><code>dynamic_args.klein</code> + hidden_size (3072→4B, 4096→9B)</td><td>Dedicated Project Invisible Qwen 2.1 bridge; native Qwen uses its engine state</td><td>Native ZImage engine/config</td></tr>
-  <tr><td>Reference path</td><td>VAE latents in <code>model.ref_latents</code></td><td>Pixel-space start image + vision-token prompts</td><td>Native masked img2img; no reference encodes</td></tr>
-  <tr><td>Prompt numbering</td><td>Picture 1 = target, Picture 2 = headshot</td><td>Auto-remapped (Picture 0 = target, prepended by Forge)</td><td>Character-LoRA prompt; no image numbering</td></tr>
-  <tr><td>Adapters</td><td>Klein-family BFS LoRAs, size-matched</td><td>Qwen-family BFS + character LoRAs, family-locked</td><td>Z-Image character LoRA required; BFS disabled</td></tr>
-  <tr><td>Latent sharpening</td><td>Supported</td><td>Skipped (pixel-space path)</td><td>Not applicable</td></tr>
+  <tr><th></th><th>FLUX.2 Klein</th><th>Qwen Image Edit 2.1</th><th>Krea2</th><th>Z-Image</th></tr>
+  <tr><td>References</td><td>Target + headshot latents</td><td>Target + headshot pixels</td><td>Source image 1 + headshot image 2</td><td>Masked img2img</td></tr>
+  <tr><td>Adapter</td><td>Size-matched BFS</td><td>Qwen BFS</td><td>Exact BFS v1.1, model-only strength 1</td><td>Character LoRA; no BFS</td></tr>
+  <tr><td>Starting point</td><td>Model workflow</td><td>Companion controls</td><td>Euler/Simple, 8 steps, CFG 1, denoise 1</td><td>Turbo CFG 1</td></tr>
 </table>
 <p class="note">Protected editing, quality checks and saved setups remain available. Z-Image uses masked character-LoRA inpainting; its Turbo mode has no negative guidance.</p>
 
 <h2>Z-Image setup</h2>
 <p>Load Z-Image and a matching character LoRA. In Swap, open <b>Z-Image · character LoRA inpainting</b>, choose Turbo or Base, and keep <b>Head only</b>. BFS is not used; headshots are optional quality references. <a href="docs/ZIMAGE.md">Setup and validation limits</a>.</p>
+<h2>Krea2 setup</h2>
+<p>Load the native Forge <b>Krea2</b> preset, keep BFS matching on Auto, use the source/body image first and headshot second, then use <code>head_swap: replace the head with the reference head.</code> Automatic SAM3 head masks apply to Z-Image; spot cleanup remains separate. <a href="docs/KREA2.md">Setup and validation limits</a>.</p>
 <h2>How it works</h2>
 <img src="docs/workflow.svg" alt="5-step workflow: Load checkpoint, img2img target, 1-20 headshots, Check setup, Generate" style="width:100%;border:1px solid var(--border);border-radius:10px">
 <p class="note">Model auto-switch: pick the checkpoint in Forge's normal dropdown — the extension follows. No mode toggle exists.</p>
 
 <h2 id="usage">Step-by-step usage</h2>
 <ol>
-  <li><b>Load</b> a Klein 4B/9B or Qwen Image Edit 2.1 checkpoint and its matching BFS LoRA.</li>
+  <li><b>Load</b> Klein, Qwen Image Edit 2.1, Krea2 or Z-Image. Auto selects the matching route.</li>
   <li><b>Open img2img</b> and upload the body/scene target picture.</li>
   <li><b>Enable Universal Head Swap</b> in the accordion and upload 1–20 sharp identity headshots.</li>
   <li><b>Check setup</b> — the preview shows the selected reference, edit area and the fully resolved prompt before any generation.</li>
   <li><b>Generate</b> with Forge's normal button. Inspect <b>Show last generation report</b>, then check the output at 100% zoom.</li>
 </ol>
-<img src="docs/ui-panel.svg" alt="Four-tab layout with BFS and character LoRA selectors, proportion correction and Qwen companion controls" style="width:100%;border:1px solid var(--border);border-radius:10px;margin-top:1rem">
+<img src="docs/ui-panel.svg" alt="Five-tab layout with Krea2 BFS auto matching and separate Z-Image controls" style="width:100%;border:1px solid var(--border);border-radius:10px;margin-top:1rem">
 
 <h2 id="install">Install</h2>
 <pre><code>cd &lt;forge&gt;/extensions
 git clone https://github.com/mishrasiddharth08/universal-head-swap
 </code></pre>
 <ol>
-  <li>Load a Klein 4B/9B or Qwen Image Edit 2.1 checkpoint and its matching BFS LoRA.</li>
+  <li>Load a supported checkpoint; Auto matches Klein, Qwen and Krea2 BFS adapters.</li>
   <li>Open <b>img2img</b>, upload the body/scene target, enable <b>Universal Head Swap</b> in the accordion.</li>
   <li>Upload 1–20 sharp identity headshots.</li>
   <li>Leave the adapter on <b>Auto (match model)</b>, denoising at the BFS start value (1.0), pick a fixed seed, click <b>Check setup</b>.</li>
@@ -114,8 +115,8 @@ git clone https://github.com/mishrasiddharth08/universal-head-swap
 
 <h2>Requirements</h2>
 <ul style="color:var(--muted)">
-  <li>Forge Neo (<a href="https://github.com/Haoming02/sd-webui-forge-classic/tree/neo">sd-webui-forge-classic, neo branch</a>) with Klein or Qwen-Image-Edit support</li>
-  <li>Checkpoint + <b>matching</b> BFS face/head-swap LoRA (Klein LoRAs do not interchange with Qwen — the extension enforces this)</li>
+  <li>Forge Neo (<a href="https://github.com/Haoming02/sd-webui-forge-classic/tree/neo">sd-webui-forge-classic, neo branch</a>) with the selected engine</li>
+  <li>Checkpoint + matching family adapter. Krea2 requires <code>bfs_head_swap_v1.1_krea2</code>.</li>
   <li>Works on NVIDIA (CUDA), AMD (ROCm) and CPU; DirectML/Vulkan not implemented. FP8 acceleration probes skipped on ROCm; portable storage fallbacks used.</li>
 </ul>
 
@@ -125,6 +126,7 @@ git clone https://github.com/mishrasiddharth08/universal-head-swap
 # CPU regression tests; actual model generation must also be checked
 </code></pre>
 
+<section><h2>Krea2 integration · October 3, 2026</h2><p>The native Forge Krea2 engine now receives source image first, head reference second, the exact trained trigger, and automatic BFS v1.1 selection from nested folders. FLUX.1 Krea Dev is excluded. The upstream starting point is Euler/Simple, 8 steps, CFG 1 and denoise 1; raw Krea2 suggests about 40 steps and CFG 3-4. Automated contracts passed, while GPU generation and visual quality remain pending.</p></section>
 <section><h2>Runtime update · September 26, 2026</h2><p>Automatic adapter matching follows the loaded Klein 4B, Klein 9B or Qwen Image Edit model when Auto is selected. Qwen references now preserve their original colors and remain on CPU until needed. Quantization and model offloading follow Forge. Qwen INT8 ConvRot was subsequently GPU-tested with BFS, character and Turbo LoRAs; other combinations remain unverified.</p></section>
 <section><h2>Dedicated Qwen 2.1 integration</h2><p>Head Swap now connects directly to the Project Invisible Qwen 2.1 engine. Automatic selection follows preset and checkpoint changes, including BFS adapters in subfolders. Your headshots form a selection pool; each output uses its target and chosen headshot. BFS, a character LoRA and Viggle Turbo were tested together on INT8 ConvRot. Protected-head mode preserves the surrounding picture, and completed files report their saved location.</p><p>Restart Forge after updating both extensions. Other quantizations and actual Klein generation still need individual GPU validation; face-match checks remain advisory.</p></section>
 <section><h2>Qwen 2.1: BFS v1.1 Alternative</h2><p>Automatic matching now prefers the alternative v1.1 adapter, including subfolders, with standard v1.1 and v1 fallbacks. Manual choices, character LoRA, protected hair and cleanup controls remain available. The author's eight-step workflow also requires a separate Pruna speed adapter; BFS alone does not enable it.</p><p>152 extension tests passed. New visual quality and all quantizations still require individual validation.</p></section>

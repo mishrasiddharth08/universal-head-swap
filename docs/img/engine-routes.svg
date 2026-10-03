@@ -1,66 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc" font-family="Segoe UI,Arial,sans-serif">
-<title id="title">Engine routing — how the loaded checkpoint picks a head-swap route</title>
-<desc id="desc">Decision infographic: the loaded engine selects the route. Klein and Qwen use BFS adapters and reference latents; Z-Image uses a character LoRA with masked inpainting and optional SAM3.</desc>
-<defs>
-  <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#0d1117"/>
-    <stop offset="1" stop-color="#111a2b"/>
-  </linearGradient>
-  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 z" fill="#58a6ff"/>
-  </marker>
-</defs>
-<rect width="960" height="420" rx="12" fill="url(#bg2)" stroke="#30363d"/>
-<text x="480" y="42" text-anchor="middle" font-size="20" font-weight="700" fill="#e6edf3">How the loaded engine picks the route</text>
-
-<!-- source node -->
-<rect x="60" y="80" width="220" height="70" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="170" y="110" text-anchor="middle" font-size="14" font-weight="600" fill="#e6edf3">Your source photo</text>
-<text x="170" y="132" text-anchor="middle" font-size="11.5" fill="#8b949e">img2img tab · normal Generate</text>
-
-<!-- decision -->
-<rect x="360" y="70" width="240" height="90" rx="10" fill="#1c2128" stroke="#58a6ff"/>
-<text x="480" y="100" text-anchor="middle" font-size="14" font-weight="600" fill="#58a6ff">Which checkpoint is loaded?</text>
-<text x="480" y="122" text-anchor="middle" font-size="11.5" fill="#8b949e">detected automatically</text>
-<text x="480" y="142" text-anchor="middle" font-size="11.5" fill="#8b949e">no manual mode switch</text>
-
-<!-- arrows from source to decision -->
-<line x1="280" y1="115" x2="356" y2="115" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arrow)"/>
-
-<!-- route 1: Klein -->
-<rect x="680" y="70" width="240" height="86" rx="10" fill="#161b22" stroke="#3fb950"/>
-<text x="800" y="96" text-anchor="middle" font-size="13.5" font-weight="700" fill="#3fb950">FLUX.2 Klein 4B / 9B</text>
-<text x="800" y="118" text-anchor="middle" font-size="11.5" fill="#e6edf3">BFS LoRA + reference latents</text>
-<text x="800" y="138" text-anchor="middle" font-size="11.5" fill="#8b949e">size-matched adapters, auto-selected</text>
-
-<!-- route 2: Qwen -->
-<rect x="680" y="172" width="240" height="86" rx="10" fill="#161b22" stroke="#3fb950"/>
-<text x="800" y="198" text-anchor="middle" font-size="13.5" font-weight="700" fill="#3fb950">Qwen Image Edit 2.1</text>
-<text x="800" y="220" text-anchor="middle" font-size="11.5" fill="#e6edf3">Project Invisible bridge · BFS</text>
-<text x="800" y="240" text-anchor="middle" font-size="11.5" fill="#8b949e">character LoRA + Viggle Turbo verified</text>
-
-<!-- route 3: Z-Image -->
-<rect x="680" y="274" width="240" height="86" rx="10" fill="#161b22" stroke="#f78166"/>
-<text x="800" y="300" text-anchor="middle" font-size="13.5" font-weight="700" fill="#f78166">Z-Image Turbo / Base</text>
-<text x="800" y="322" text-anchor="middle" font-size="11.5" fill="#e6edf3">character-LoRA masked inpainting</text>
-<text x="800" y="342" text-anchor="middle" font-size="11.5" fill="#8b949e">optional SAM3 mask · no BFS needed</text>
-
-<!-- arrows decision to routes -->
-<line x1="600" y1="98" x2="676" y2="110" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arrow)"/>
-<line x1="600" y1="115" x2="676" y2="213" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arrow)"/>
-<line x1="600" y1="132" x2="676" y2="315" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#arrow)"/>
-
-<!-- identity flow -->
-<rect x="60" y="200" width="220" height="70" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="170" y="228" text-anchor="middle" font-size="13" font-weight="600" fill="#e6edf3">Headshot / character LoRA</text>
-<text x="170" y="250" text-anchor="middle" font-size="11.5" fill="#8b949e">provides identity for the swap</text>
-<line x1="170" y1="200" x2="170" y2="154" stroke="#58a6ff" stroke-width="1.4" marker-end="url(#arrow)"/>
-
-<!-- output -->
-<rect x="360" y="310" width="240" height="70" rx="10" fill="#161b22" stroke="#d29922"/>
-<text x="480" y="338" text-anchor="middle" font-size="13" font-weight="600" fill="#d29922">One output canvas</text>
-<text x="480" y="360" text-anchor="middle" font-size="11.5" fill="#8b949e">body + scene preserved, head swapped</text>
-<line x1="676" y1="352" x2="604" y2="348" stroke="#58a6ff" stroke-width="1.4" marker-end="url(#arrow)"/>
-
-<text x="480" y="404" text-anchor="middle" font-size="11" fill="#8b949e">BFS adapters are family-locked: a Klein BFS LoRA never loads on Qwen and vice versa.</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" role="img" aria-labelledby="title desc" font-family="Segoe UI,Arial,sans-serif">
+<title id="title">Automatic engine routing</title><desc id="desc">The loaded Forge checkpoint selects Klein, Qwen 2.1, Krea2 or Z-Image.</desc><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#58a6ff"/></marker></defs><rect width="960" height="500" rx="12" fill="#0d1117" stroke="#30363d"/><text x="480" y="42" text-anchor="middle" font-size="20" font-weight="700" fill="#e6edf3">How the loaded engine picks the route</text>
+<rect x="45" y="88" width="210" height="70" rx="10" fill="#161b22" stroke="#30363d"/><text x="150" y="118" text-anchor="middle" font-size="14" font-weight="600" fill="#e6edf3">Source + identity</text><text x="150" y="140" text-anchor="middle" font-size="11.5" fill="#8b949e">img2img - normal Generate</text>
+<rect x="330" y="78" width="250" height="90" rx="10" fill="#1c2128" stroke="#58a6ff"/><text x="455" y="110" text-anchor="middle" font-size="14" font-weight="600" fill="#58a6ff">Which checkpoint is loaded?</text><text x="455" y="136" text-anchor="middle" font-size="11.5" fill="#8b949e">automatic engine and family detection</text><line x1="255" y1="123" x2="326" y2="123" stroke="#58a6ff" stroke-width="1.6" marker-end="url(#a)"/>
+<g fill="#161b22"><rect x="660" y="62" width="260" height="82" rx="10" stroke="#3fb950"/><rect x="660" y="158" width="260" height="82" rx="10" stroke="#3fb950"/><rect x="660" y="254" width="260" height="98" rx="10" stroke="#d2a8ff"/><rect x="660" y="366" width="260" height="82" rx="10" stroke="#f78166"/></g>
+<g text-anchor="middle"><text x="790" y="88" font-size="13.5" font-weight="700" fill="#3fb950">FLUX.2 Klein 4B / 9B</text><text x="790" y="112" font-size="11.5" fill="#e6edf3">size-matched BFS + latents</text><text x="790" y="184" font-size="13.5" font-weight="700" fill="#3fb950">Qwen Image Edit 2.1</text><text x="790" y="208" font-size="11.5" fill="#e6edf3">Project Invisible bridge + BFS</text><text x="790" y="280" font-size="13.5" font-weight="700" fill="#d2a8ff">Krea2</text><text x="790" y="304" font-size="11.5" fill="#e6edf3">BFS v1.1, source then headshot</text><text x="790" y="328" font-size="10.5" fill="#8b949e">Euler / Simple - 8 steps - CFG 1</text><text x="790" y="392" font-size="13.5" font-weight="700" fill="#f78166">Z-Image Turbo / Base</text><text x="790" y="416" font-size="11.5" fill="#e6edf3">character LoRA + optional SAM3</text></g>
+<g stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a)"><line x1="580" y1="105" x2="656" y2="103"/><line x1="580" y1="120" x2="656" y2="199"/><line x1="580" y1="135" x2="656" y2="302"/><line x1="580" y1="150" x2="656" y2="407"/></g>
+<text x="480" y="478" text-anchor="middle" font-size="11" fill="#8b949e">BFS adapters are family-specific. Krea2 never selects FLUX.1 Krea Dev. Automatic SAM3 head masks apply to Z-Image.</text>
 </svg>

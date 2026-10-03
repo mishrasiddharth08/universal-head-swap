@@ -1,53 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" role="img" aria-labelledby="title desc" font-family="Segoe UI,Arial,sans-serif">
-<title id="title">Universal Head Swap — four-tab UI guide</title>
-<desc id="desc">Choose headshots, an automatically matched BFS LoRA and optional character LoRA in Swap. Appearance, Quality and mask, and Settings contain advanced controls. Qwen companion supports model reuse and full batch progress. Layout illustration, September 28, 2026.</desc>
-<rect x="0" y="0" width="960" height="720" rx="10" fill="#0d1117" stroke="#30363d"/>
-<text x="32" y="45" font-size="27" fill="#e6edf3" font-weight="700">Universal Head Swap</text>
-<text x="32" y="73" font-size="14" fill="#8b949e" font-weight="400">Four focused tabs · native Forge Generate · layout guide / 28 September 2026</text>
-<rect x="32" y="96" width="212" height="46" rx="10" fill="#1f6feb" stroke="#30363d"/>
-<text x="47" y="125" font-size="16" fill="#e6edf3" font-weight="700">1 · Swap</text>
-<rect x="260" y="96" width="212" height="46" rx="10" fill="#21262d" stroke="#30363d"/>
-<text x="275" y="125" font-size="16" fill="#e6edf3" font-weight="700">2 · Appearance</text>
-<rect x="488" y="96" width="212" height="46" rx="10" fill="#21262d" stroke="#30363d"/>
-<text x="503" y="125" font-size="16" fill="#e6edf3" font-weight="700">3 · Quality &amp; mask</text>
-<rect x="716" y="96" width="212" height="46" rx="10" fill="#21262d" stroke="#30363d"/>
-<text x="731" y="125" font-size="16" fill="#e6edf3" font-weight="700">4 · Settings</text>
-<rect x="32" y="164" width="344" height="212" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="52" y="195" font-size="18" fill="#e6edf3" font-weight="700">Headshots</text>
-<rect x="52" y="216" width="62" height="72" rx="10" fill="#21262d" stroke="#30363d"/>
-<circle cx="83" cy="239" r="10" fill="#8b949e"/><path d="M65 276 Q65 252 83 252 Q101 252 101 276" fill="#8b949e"/>
-<rect x="128" y="216" width="62" height="72" rx="10" fill="#21262d" stroke="#30363d"/>
-<circle cx="159" cy="239" r="10" fill="#8b949e"/><path d="M141 276 Q141 252 159 252 Q177 252 177 276" fill="#8b949e"/>
-<rect x="204" y="216" width="62" height="72" rx="10" fill="#21262d" stroke="#30363d"/>
-<circle cx="235" cy="239" r="10" fill="#8b949e"/><path d="M217 276 Q217 252 235 252 Q253 252 253 276" fill="#8b949e"/>
-<rect x="280" y="216" width="62" height="72" rx="10" fill="#21262d" stroke="#30363d"/>
-<circle cx="311" cy="239" r="10" fill="#8b949e"/><path d="M293 276 Q293 252 311 252 Q329 252 329 276" fill="#8b949e"/>
-<text x="52" y="321" font-size="15" fill="#e6edf3" font-weight="400">Add 1–20 identity references</text>
-<text x="52" y="348" font-size="13" fill="#8b949e" font-weight="400">Similar pose and lighting work best.</text>
-<rect x="396" y="164" width="532" height="99" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="416" y="194" font-size="18" fill="#e6edf3" font-weight="700">Head-swap LoRA (BFS) · Auto</text>
-<text x="416" y="223" font-size="15" fill="#e6edf3" font-weight="400">Matches Qwen 2.1 / Klein 9B / Klein 4B</text>
-<text x="416" y="247" font-size="13" fill="#8b949e" font-weight="400">Qwen: prefers installed BFS v1.1 Alternative</text>
-<rect x="396" y="279" width="532" height="97" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="416" y="310" font-size="18" fill="#e6edf3" font-weight="700">Character LoRA · optional</text>
-<text x="416" y="339" font-size="14" fill="#e6edf3" font-weight="400">Required for Z-Image; optional for Klein / Qwen.</text>
-<text x="416" y="362" font-size="13" fill="#8b949e" font-weight="400">Strengths and trigger: expand LoRA controls.</text>
-<rect x="32" y="394" width="896" height="74" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="52" y="423" font-size="17" fill="#e6edf3" font-weight="700">Edit area: Head only / Whole image</text>
-<text x="52" y="449" font-size="15" fill="#58a6ff" font-weight="400">Preview setup → inspect mask → press Forge Generate</text>
-<rect x="32" y="488" width="288" height="107" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="48" y="516" font-size="17" fill="#e6edf3" font-weight="700">Appearance</text>
-<text x="48" y="544" font-size="13" fill="#8b949e" font-weight="400">Cleanup, hair and expression</text>
-<text x="48" y="568" font-size="13" fill="#8b949e" font-weight="400">Spot cleanup: detect, review, remove.</text>
-<rect x="336" y="488" width="288" height="107" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="352" y="516" font-size="17" fill="#e6edf3" font-weight="700">Quality &amp; mask</text>
-<text x="352" y="544" font-size="13" fill="#8b949e" font-weight="400">Bounded head-size / chin alignment</text>
-<text x="352" y="568" font-size="13" fill="#8b949e" font-weight="400">Blending, detail and finishing</text>
-<rect x="640" y="488" width="288" height="107" rx="10" fill="#161b22" stroke="#30363d"/>
-<text x="656" y="516" font-size="17" fill="#e6edf3" font-weight="700">Settings</text>
-<text x="656" y="544" font-size="13" fill="#8b949e" font-weight="400">Memory limits and saved setups</text>
-<text x="656" y="568" font-size="13" fill="#8b949e" font-weight="400">Generation reports</text>
-<text x="32" y="630" font-size="16" fill="#58a6ff" font-weight="700">Qwen companion: keep model loaded + GPU offload controls</text>
-<text x="32" y="657" font-size="15" fill="#e6edf3" font-weight="400">Total progress counts all images and optional refinement steps.</text>
-<text x="32" y="691" font-size="13" fill="#8b949e" font-weight="400">Z-Image: choose a character LoRA + Head only. Optional SAM3: one-time setup, reused locally.</text>
+<title id="title">Universal Head Swap five-tab UI guide</title><desc id="desc">Five tabs with automatic BFS matching for Klein, Qwen and Krea2 plus a separate Z-Image and SAM3 tab.</desc><rect width="960" height="720" rx="10" fill="#0d1117" stroke="#30363d"/><text x="32" y="45" font-size="27" fill="#e6edf3" font-weight="700">Universal Head Swap</text><text x="32" y="73" font-size="14" fill="#8b949e">Five focused tabs - native Forge Generate - 3 October 2026</text>
+<g fill="#21262d" stroke="#30363d"><rect x="32" y="96" width="166" height="46" rx="10" fill="#1f6feb"/><rect x="214" y="96" width="166" height="46" rx="10"/><rect x="396" y="96" width="166" height="46" rx="10"/><rect x="578" y="96" width="166" height="46" rx="10"/><rect x="760" y="96" width="168" height="46" rx="10"/></g>
+<g fill="#e6edf3" font-size="14" font-weight="700"><text x="47" y="125">1 - Swap</text><text x="229" y="125">2 - Z-Image</text><text x="411" y="125">3 - Appearance</text><text x="593" y="125">4 - Quality</text><text x="775" y="125">5 - Settings</text></g>
+<rect x="32" y="164" width="344" height="212" rx="10" fill="#161b22" stroke="#30363d"/><text x="52" y="195" font-size="18" fill="#e6edf3" font-weight="700">Headshots</text><g fill="#21262d" stroke="#30363d"><rect x="52" y="216" width="62" height="72" rx="10"/><rect x="128" y="216" width="62" height="72" rx="10"/><rect x="204" y="216" width="62" height="72" rx="10"/><rect x="280" y="216" width="62" height="72" rx="10"/></g><text x="52" y="321" font-size="15" fill="#e6edf3">Add 1-20 identity references</text><text x="52" y="348" font-size="13" fill="#8b949e">Source image stays first; headshot is second.</text>
+<rect x="396" y="164" width="532" height="99" rx="10" fill="#161b22" stroke="#30363d"/><text x="416" y="194" font-size="18" fill="#e6edf3" font-weight="700">Head-swap LoRA (BFS) - Auto</text><text x="416" y="223" font-size="15" fill="#e6edf3">Matches Klein, Qwen 2.1 and Krea2</text><text x="416" y="247" font-size="13" fill="#8b949e">Krea2: exact BFS v1.1, including nested folders</text>
+<rect x="396" y="279" width="532" height="97" rx="10" fill="#161b22" stroke="#30363d"/><text x="416" y="310" font-size="18" fill="#e6edf3" font-weight="700">Character LoRA - optional</text><text x="416" y="339" font-size="14" fill="#e6edf3">Required for Z-Image; optional matching LoRA elsewhere.</text><text x="416" y="362" font-size="13" fill="#8b949e">Krea2 BFS is model-only at strength 1.</text>
+<rect x="32" y="394" width="896" height="82" rx="10" fill="#161b22" stroke="#30363d"/><text x="52" y="423" font-size="17" fill="#e6edf3" font-weight="700">Krea2 exact trigger</text><text x="52" y="450" font-size="15" fill="#d2a8ff">head_swap: replace the head with the reference head.</text>
+<rect x="32" y="496" width="280" height="108" rx="10" fill="#161b22" stroke="#30363d"/><text x="48" y="526" font-size="17" fill="#e6edf3" font-weight="700">Z-Image &amp; SAM3</text><text x="48" y="554" font-size="13" fill="#8b949e">Separate masked-inpaint route</text><text x="48" y="578" font-size="13" fill="#8b949e">Automatic SAM3 head masks.</text>
+<rect x="328" y="496" width="280" height="108" rx="10" fill="#161b22" stroke="#30363d"/><text x="344" y="526" font-size="17" fill="#e6edf3" font-weight="700">Appearance + Quality</text><text x="344" y="554" font-size="13" fill="#8b949e">Cleanup, protected mask, finishing</text><text x="344" y="578" font-size="13" fill="#8b949e">Review outputs at 100% zoom.</text>
+<rect x="624" y="496" width="304" height="108" rx="10" fill="#161b22" stroke="#30363d"/><text x="640" y="526" font-size="17" fill="#e6edf3" font-weight="700">Settings</text><text x="640" y="554" font-size="13" fill="#8b949e">Memory profiles, saved setups</text><text x="640" y="578" font-size="13" fill="#8b949e">Generation reports</text>
+<text x="32" y="646" font-size="15" fill="#58a6ff" font-weight="700">Krea2 start: Euler / Simple - 8 steps - CFG 1 - denoise 1</text><text x="32" y="676" font-size="13" fill="#8b949e">Raw Krea2 guidance from upstream: about 40 steps and CFG 3-4. GPU and visual validation remain pending.</text>
 </svg>

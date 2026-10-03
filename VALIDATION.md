@@ -1,3 +1,13 @@
+## 3 October 2026 — Krea2 integration contracts
+
+- Full extension suite: **201 tests and 6 subtests passed**, with 6 warnings.
+- Real local BFS v1.1 and Krea2 Turbo BF16 headers: all 256 paired adapter layers have matching model targets and shapes.
+- Actual Forge LoRA mapper/parser using meta tensors: **512 matched tensor keys, 256 adapter layers, zero unused keys**, with no hardware tensor allocation.
+- Actual native Krea2 conditioning method with lightweight state: source image first, one identity reference, source consumed once; negative conditioning uses text only.
+- Regression coverage includes nested-folder automatic selection, FLUX.1 Krea Dev exclusion, exact unweighted trigger deduplication, incompatible adapter rejection, CFG behavior and reference-option restoration. Existing Qwen/Klein/Z-Image tests remain passing.
+- Updated SVGs parse successfully; the engine-routes infographic was rendered and visually reviewed.
+- **No live Krea2 image generation or visual acceptance was performed**, because AI Toolkit training occupied the GPU. Adapter parsing and conditioning checks are not inference. Speed, peak VRAM, Raw execution, quantization coverage and 6/8 GB operation remain unverified.
+
 ## 28 September 2026 — single blending and reviewed spot cleanup
 
 - Z-Image skips Forge's duplicate final overlay; the extension blends the protected mask once.

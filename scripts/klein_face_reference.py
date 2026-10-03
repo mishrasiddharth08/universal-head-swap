@@ -379,7 +379,7 @@ class UniversalHeadSwap(scripts.Script):
             def sync_adapter(preset,checkpoint,automatic):
                 """Smart settings: choose the best setup for the selected model preset.
 
-                Klein/Qwen: pick the recommended BFS LoRA and show BFS controls.
+                Klein/Qwen/Krea2: pick the recommended BFS LoRA and show BFS controls.
                 Z-Image (ZIT/ZIB): switch to a character LoRA, set Turbo/Base from the
                 preset, prefer SAM3 masks from models/SAM 3, and hide the unused
                 BFS controls so the panel stays simple.
@@ -387,7 +387,7 @@ class UniversalHeadSwap(scripts.Script):
                 key=str(preset or '').lower(); checkpoint=str(checkpoint or '').lower()
                 flat=(key+' '+checkpoint).replace('-','').replace('_','').replace(' ','')
                 is_zimage='zimage' in flat or 'zit' in key.split() or 'zib' in key.split()
-                is_family='qwen' in flat or 'klein' in flat
+                is_family='qwen' in flat or 'klein' in flat or 'krea2' in flat or key.strip()=='krea'
                 def visibility(zimage):
                     hide=gr.update(visible=not zimage)
                     show_z=gr.update(visible=zimage,open=zimage)
@@ -418,7 +418,8 @@ class UniversalHeadSwap(scripts.Script):
                             gr.update(value=found) if found else gr.update(),
                             gr.update(choices=['None (skip)']+names,value=char),
                             hide,show_z)
-                if 'qwen' in flat: family,size='qwen',None
+                if 'krea2' in flat or key.strip()=='krea': family,size='krea',None
+                elif 'qwen' in flat: family,size='qwen',None
                 elif 'klein' in flat: family,size='klein',4 if '4b' in flat else 9
                 else:
                     hide,show_z=visibility(False)
