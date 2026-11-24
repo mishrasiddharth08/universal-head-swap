@@ -23,7 +23,7 @@ class ZImageRuntimeTests(unittest.TestCase):
             basename=key.split('/')[-1]
             entry=NS(alias=key,filename='G:/models/Lora/'+key+'.safetensors',
                      metadata={'ss_base_model_version':base})
-            cfg=core.normalize({'char_lora_name':basename})
+            cfg=core.normalize({'zimage_variant':'Turbo' if base.endswith('Turbo') else 'Base','char_lora_name':basename})
             with self.subTest(key=key), patch('khs.runtime.registry',return_value={key:entry}):
                 self.assertEqual(runtime.resolve_adapters(cfg,None,'zimage'),('',key))
 
