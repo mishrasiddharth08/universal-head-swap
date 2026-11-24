@@ -11,6 +11,20 @@ from khs import core,zimage
 
 
 class ZImageIdentityTests(unittest.TestCase):
+    def test_runtime_rejects_base_adapter_on_loaded_turbo_checkpoint(self):
+        from khs import runtime
+        from unittest.mock import patch
+        name='rinmjq-woman-PlatinumEdition-FE-2026-ZIB'
+        entry=NS(filename=f'ZIB CHAR LORA/{name}.safetensors',metadata={'ss_base_model_version':'zimage'})
+        cfg=core.normalize(dict(char_lora_name=name,char_lora_strength=.8,zimage_variant='Base'))
+        model=NS(sd_checkpoint_info=NS(filename='Z IMAGE/Z-Image-Turbo-BF16.safetensors'))
+        with patch.object(runtime,'registry',return_value={name:entry}):
+            with self.assertRaisesRegex(ValueError,'Select a Turbo character LoRA'):
+                runtime.resolve_adapters(cfg,model,'zimage')
+            model.sd_checkpoint_info.filename='Z IMAGE/Z-Image-BF16.safetensors'
+            self.assertEqual(runtime.resolve_adapters(cfg,model,'zimage'),('',name))
+            self.assertEqual(cfg['zimage_variant'],'Base')
+
     def session(self,denoise):
         mask=Image.new('L',(80,80),0)
         ImageDraw.Draw(mask).ellipse((20,10,60,60),fill=255)

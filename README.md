@@ -17,7 +17,7 @@
 - **Krea2 live results:** five protected-head INT8 + native Spectrum images saved at 1024×1280. The first request took 28.31 seconds; four warm requests took 18.93–20.54 seconds. Pixels outside each mask were unchanged. Face geometry, skin matching and exact likeness still need visual review. [Setup and limits](docs/KREA2.md).
 
 - **Z-Image Turbo / Base:** native Forge inpainting, a matching character LoRA, protected head mask and the original output canvas. No BFS or reference-image encoding on this route.
-- **Optional SAM3:** local-only, CPU masking with a bounded cache; released before sampling. The fast face detector and custom masks need no SAM3 installation.
+- **Optional SAM3:** local masking with automatic device selection and a bounded cache; released before sampling. The fast face detector and custom masks need no SAM3 installation.
 - **Z-Image setup and limits:** [read the guide](docs/ZIMAGE.md).
 
 - **Fixed dedicated Qwen 2.1 routing:** Head Swap now supplies its references, prompts, BFS and character LoRAs to the Project Invisible engine.

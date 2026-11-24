@@ -1,3 +1,10 @@
+## 24 November 2026 — Mask protection and model switching
+
+- Character selections are checked when switching models.
+- Paint the target to make an edit mask, or upload an existing white-on-black mask separately. A grayscale target no longer acts as a full-image mask.
+- Protected alignment uses uniform scaling. Sharpening, HDR and grain respect the edit mask. Explicit spot cleanup still uses its own mask.
+- SAM3 falls back to the detected face when its segmentation misses the selected head.
+
 ## 3 October 2026 — Z-Image inpainting boundaries and character adapters
 
 - Replaced soft sampling masks with solid expanded coverage and retained the original feathered paste-back mask.

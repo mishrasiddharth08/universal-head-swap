@@ -238,6 +238,20 @@ def clean_name(name):
     name=re.sub(r'\.(?:safetensors|pt|ckpt|bin)$','',name,flags=re.I)
     return name.replace('\\','/')
 
+def zimage_variant(name,metadata=None,checkpoint=False):
+    """Recognize explicit Base/Turbo labels. Generic adapter names stay unknown."""
+    fields=[name]+[(metadata or {}).get(key,'') for key in
+                   ('ss_base_model_version','ss_sd_model_name','modelspec.title','ss_output_name')]
+    for field in fields:
+        tokens=re.findall(r'[a-z0-9]+',str(field or '').lower())
+        if 'zit' in tokens or 'turbo' in tokens: return 'Turbo'
+        if 'zib' in tokens or 'base' in tokens: return 'Base'
+    if checkpoint:
+        stem=Path(str(name).replace(chr(92),'/')).stem.lower()
+        if re.fullmatch(r'z[-_ ]?image(?:[-_ .]+(?:bf16|fp16|fp32|fp8|int8|int4|q[0-9][a-z0-9_]*|convrot))*',stem):
+            return 'Base'
+    return None
+
 def adapter_family(name,metadata=None):
     text=' '.join([str(name)]+[str(v) for k,v in (metadata or {}).items() if k in
                   ('ss_base_model_version','modelspec.architecture','modelspec.title','ss_sd_model_name','base_model')]).lower()
@@ -422,7 +436,11 @@ def build_plan(user,negative,cfg,seed,all_choices,fs_name,char_name='',host_cfg=
                        'one replacement head; remove the original head completely')
     for key,policy in appearances.items():
         if policy=='Remove': clauses.append(ZIMAGE_CLEAN_POS[key] if family=='zimage' else BAN_POS[key])
-        elif policy=='Preserve': clauses.append(f'preserve allowed {key} from {"the source image" if family=="zimage" else "Picture 1"} except items explicitly required to be removed')
+    if any(policy=='Preserve' for policy in appearances.values()):
+        # Naming every absent ornament in the positive prompt can prime it.
+        # Preserve what is actually present without requesting those objects.
+        source_name='the source image' if family=='zimage' else 'Picture 1'
+        clauses.append(f'preserve existing accessories and markings from {source_name}, except explicitly requested changes; do not invent new accessories or markings')
     if cfg['match_sharpness']:
         clauses.append('match the original focal sharpness and local contrast; preserve fine skin pores, age texture, individual hair strands and fabric detail; avoid waxy or airbrushed skin')
     weight=1.0+cfg['blend_slider']/200.0
@@ -658,26 +676,17 @@ class EditRegion:
 def build_region(original,pose,padding=0.55,feather=0.08,mask=None,preserve_hair=False):
     # A cleared Gradio editor can return either None or a black default canvas.
     # Both mean no custom edit area; retain detected-head protection.
-    if isinstance(mask,dict):
-        mask=mask.get('composite') if mask.get('composite') is not None else mask.get('background')
-        if mask is not None:
-            if not isinstance(mask,Image.Image): mask=rgb_image(mask)
-            if mask.mode in ('RGBA','LA') or 'transparency' in mask.info:
-                rgba=mask.convert('RGBA')
-                visible=Image.new('RGB',rgba.size,'black')
-                visible.paste(rgba,mask=rgba.getchannel('A'))
-                mask=visible
-            mask=ImageOps.exif_transpose(mask).convert('L')
-            if mask.getbbox() is None:
-                print('[UniversalHeadSwap] Blank mask editor: using automatic head detection.')
-                mask=None
+    from .masking import editor_mask,resize_mask
+    mask=editor_mask(mask,rgb_image)
+    custom_alpha=None
     if mask is not None:
         if not isinstance(mask,Image.Image): mask=rgb_image(mask)
         mask=ImageOps.exif_transpose(mask).convert('L')
         if mask.size!=original.size:
             # Batch folders mix dimensions; scale the mask to each target instead of aborting the run.
             print(f"[UniversalHeadSwap] Custom mask {mask.size} != target {original.size}; resizing mask to fit.")
-            mask=mask.resize(original.size,Image.Resampling.LANCZOS)
+            mask=resize_mask(mask,original.size)
+        custom_alpha=mask.copy()
         bbox=mask.getbbox()
         if not bbox: raise ValueError('The custom mask has no white edit region.')
         x0,y0,x1,y1=bbox; hh=y1-y0; hw=x1-x0
@@ -698,6 +707,10 @@ def build_region(original,pose,padding=0.55,feather=0.08,mask=None,preserve_hair
         ImageDraw.Draw(mask).ellipse((x0,y0,x1,jaw_end),fill=255)
     radius=max(0,round(min(hw,hh)*feather))
     if radius: mask=mask.filter(ImageFilter.GaussianBlur(radius))
+    if custom_alpha is not None:
+        # Explicit black means preserve. Feather inside the painted coverage,
+        # and never amplify soft alpha or expand into unpainted pixels.
+        mask=Image.fromarray(np.minimum(np.asarray(mask),np.asarray(custom_alpha)).astype(np.uint8),'L')
     if pose is not None and 'jaw_start' in locals():
         # Clamp post-blur spill below the jaw while retaining a smooth blend.
         arr=np.asarray(mask,dtype=np.float32).copy()

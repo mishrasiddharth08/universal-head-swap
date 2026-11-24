@@ -285,13 +285,21 @@ class UniversalHeadSwap(scripts.Script):
                         gr.Markdown('Off by default. Skips images without a detected grid; limits changes to protect fine texture. Compare at 100% zoom. This is not tattoo or piercing removal.')
                     with gr.Accordion('Head mask and blending',open=False) as mask_section:
                         gr.Markdown('For Head only mode: **white edits, black preserves**. A custom mask must match the target dimensions.')
-                        C['custom_mask']=gr.ImageEditor(label='Optional edit mask',type='pil',image_mode='RGB',height=300,
+                        C['custom_mask']=gr.ImageEditor(label='Optional edit mask',type='pil',image_mode='RGBA',height=300,
                             brush=gr.Brush(colors=['#ffffff','#000000'],color_mode='fixed'),format='png',
                             sources=['upload','clipboard'],transforms=[])
                         with gr.Row():
                             mask_button=gr.Button('Create mask from detected head')
                             clear_mask=gr.Button('Clear mask · use automatic detection')
                         clear_mask.click(lambda:None,outputs=C['custom_mask'],queue=False)
+                        mask_upload=gr.Image(label='Upload a white-on-black edit mask (optional)',type='pil',image_mode='RGBA',sources=['upload'],height=160)
+                        def import_mask(mask):
+                            if mask is None: return None
+                            from PIL import Image
+                            layer=mask.convert('RGBA')
+                            return {'background':Image.new('RGBA',layer.size,(0,0,0,255)),'layers':[layer],'composite':layer}
+                        mask_upload.upload(import_mask,inputs=mask_upload,outputs=C['custom_mask'],queue=False)
+                        gr.Markdown('Paint white to edit and black to preserve. Custom-mask softness feathers inward; black pixels stay unchanged unless you enable whole-image finishing effects.')
                         with gr.Row():
                             slide('crop_padding','Context around head',0.2,1.5,0.05)
                             slide('mask_feather','Blend edge softness',0,0.25,0.01)
@@ -380,17 +388,18 @@ class UniversalHeadSwap(scripts.Script):
                 except Exception: return None
             SMART_OUTPUTS=[C['lora_dropdown'],C['zimage_variant'],C['zimage_mask_source'],C['sam3_checkpoint'],C['char_lora_name']]
             UI_VISIBILITY=[bfs_column,zimage_section]
-            def sync_adapter(preset,checkpoint,automatic):
+            def sync_adapter(preset,checkpoint,automatic,current_char='None (skip)'):
                 """Smart settings: choose the best setup for the selected model preset.
 
                 Klein/Qwen/Krea2: pick the recommended BFS LoRA and show BFS controls.
                 Z-Image (ZIT/ZIB): switch to a character LoRA, set Turbo/Base from the
-                preset, prefer SAM3 masks from models/SAM 3, and hide the unused
+                checkpoint, preserve optional SAM3 settings, and hide the unused
                 BFS controls so the panel stays simple.
                 """
                 key=str(preset or '').lower(); checkpoint=str(checkpoint or '').lower()
                 flat=(key+' '+checkpoint).replace('-','').replace('_','').replace(' ','')
-                is_zimage='zimage' in flat or 'zit' in key.split() or 'zib' in key.split()
+                is_zimage=('zimage' in flat or core.adapter_family(checkpoint)[0]=='zimage'
+                           or 'zit' in key.split() or 'zib' in key.split())
                 is_family='qwen' in flat or 'klein' in flat or 'krea2' in flat or key.strip()=='krea'
                 def labels(family):
                     if family=='krea': return 'Krea2 head-swap LoRA · BFS v1.1','Krea2 Character LoRA · optional, same family'
@@ -402,36 +411,35 @@ class UniversalHeadSwap(scripts.Script):
                     hide=gr.update(visible=not zimage)
                     show_z=gr.update(visible=zimage,open=zimage)
                     return hide,show_z
-                if not automatic:
-                    if is_zimage:
-                        bfs_label,char_label=labels('zimage')
-                        hide,show_z=visibility(True); return gr.update(label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
-                    family='krea' if 'krea2' in flat or key.strip()=='krea' else 'qwen' if 'qwen' in flat else 'klein' if 'klein' in flat else None
-                    bfs_label,char_label=labels(family)
-                    hide,show_z=visibility(False); return gr.update(label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
-                key=str(preset or '').lower(); checkpoint=str(checkpoint or '').lower()
-                flat=(key+' '+checkpoint).replace('-','').replace('_','').replace(' ','')
                 if is_zimage:
                     bfs_label,char_label=labels('zimage')
-                    variant='Base' if 'zib' in flat or 'base' in flat else 'Turbo'
-                    found=sam3_installed()
+                    variant=core.zimage_variant(checkpoint,checkpoint=True) or core.zimage_variant(key)
                     try:
                         import networks
                         networks.list_available_networks()
                         entries=runtime.registry()
-                        zimage_names=[name for name,item in entries.items()
-                                      if core.adapter_family(name,getattr(item,'metadata',None))[0]=='zimage']
-                        # Prefer character-labelled adapters; fall back to any Z-Image adapter.
-                        preferred=[n for n in zimage_names if 'char' in n.lower()] or zimage_names
-                        char=preferred[0] if preferred else 'None (skip)'
-                    except Exception: char='None (skip)'
+                        current_names=list(entries)
+                        char=current_char if current_char in entries else 'None (skip)'
+                        if char in entries:
+                            try: core.compatible_adapter(char,None,getattr(entries[char],'metadata',None),False,'zimage')
+                            except ValueError: char='None (skip)'
+                            if char in entries:
+                                char_variant=(core.zimage_variant(char,getattr(entries[char],'metadata',None))
+                                              or core.zimage_variant(getattr(entries[char],'filename',''),getattr(entries[char],'metadata',None)))
+                                if variant and char_variant and variant!=char_variant: char='None (skip)'
+                    except Exception:
+                        current_names=names; char=current_char
                     hide,show_z=visibility(True)
-                    return (gr.update(choices=['Auto (match model)','Not used (Z-Image)']+names,value='Not used (Z-Image)',label=bfs_label),
-                            gr.update(value=variant),
-                            gr.update(value='SAM3 (optional)') if found else gr.update(),
-                            gr.update(value=found) if found else gr.update(),
-                            gr.update(choices=['None (skip)']+names,value=char,label=char_label),
+                    return (gr.update(choices=['Auto (match model)','Not used (Z-Image)']+current_names,value='Not used (Z-Image)',label=bfs_label) if automatic else gr.update(label=bfs_label),
+                            gr.update(value=variant) if variant else gr.update(),
+                            gr.update(),gr.update(),
+                            gr.update(choices=['None (skip)']+current_names,value=char,label=char_label),
                             hide,show_z)
+                if not automatic:
+                    family='krea' if 'krea2' in flat or key.strip()=='krea' else 'qwen' if 'qwen' in flat else 'klein' if 'klein' in flat else None
+                    bfs_label,char_label=labels(family)
+                    hide,show_z=visibility(False)
+                    return gr.update(label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
                 if 'krea2' in flat or key.strip()=='krea': family,size='krea',None
                 elif 'qwen' in flat: family,size='qwen',None
                 elif 'klein' in flat: family,size='klein',4 if '4b' in flat else 9
@@ -440,16 +448,22 @@ class UniversalHeadSwap(scripts.Script):
                     hide,show_z=visibility(False)
                     return gr.update(value='Auto (match model)',label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
                 bfs_label,char_label=labels(family)
+                char_update=gr.update(label=char_label)
                 try:
                     import networks
                     networks.list_available_networks()
                     entries=runtime.registry()
+                    char=current_char if current_char in entries else 'None (skip)'
+                    if char in entries:
+                        try: core.compatible_adapter(char,size,getattr(entries[char],'metadata',None),False,family)
+                        except ValueError: char='None (skip)'
+                    char_update=gr.update(choices=['None (skip)']+list(entries),value=char,label=char_label)
                     choice=core.select_adapter({name:item.metadata for name,item in entries.items()},size,family)
                     hide,show_z=visibility(False)
-                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice,label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
+                    return gr.update(choices=['Auto (match model)']+list(entries),value=choice,label=bfs_label),gr.update(),gr.update(),gr.update(),char_update,hide,show_z
                 except Exception:
                     hide,show_z=visibility(False)
-                    return gr.update(value='Auto (match model)',label=bfs_label),gr.update(),gr.update(),gr.update(),gr.update(label=char_label),hide,show_z
+                    return gr.update(value='Auto (match model)',label=bfs_label),gr.update(),gr.update(),gr.update(),char_update,hide,show_z
             preset_component=self.components.get('forge_preset')
             checkpoint_component=self.components.get('checkpoint')
             try:
@@ -459,9 +473,10 @@ class UniversalHeadSwap(scripts.Script):
             except ImportError:
                 pass
             if preset_component is not None and checkpoint_component is not None:
-                inputs=[preset_component,checkpoint_component,C['auto_model_adapter']]
+                controls=[preset_component,checkpoint_component,C['auto_model_adapter']]
+                inputs=controls+[C['char_lora_name']]
                 gr.context.Context.root_block.load(sync_adapter,inputs=inputs,outputs=SMART_OUTPUTS+UI_VISIBILITY,queue=False)
-                for control in inputs:
+                for control in controls:
                     control.change(sync_adapter,inputs=inputs,outputs=SMART_OUTPUTS+UI_VISIBILITY,queue=False)
             def refresh_adapters():
                 import networks
@@ -497,7 +512,7 @@ class UniversalHeadSwap(scripts.Script):
                         im=core.rgb_image(image); faces=self.analyzer.faces(im); idx=int(face)-1
                         if idx>=len(faces): raise ValueError('Selected face not detected. Upload a custom mask instead.')
                         mask=core.build_region(im,faces[idx],float(padding),0).mask.convert('RGB')
-                        return {'background':mask,'layers':[],'composite':mask}
+                        return import_mask(mask)
                     except gr.Error: raise
                     except Exception as e: raise gr.Error(str(e))
                 mask_button.click(make_mask,inputs=[required[0],C['target_face'],C['crop_padding']],outputs=C['custom_mask'])

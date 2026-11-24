@@ -22,18 +22,9 @@ def clear_mask_cache():
 
 
 def has_custom_mask(value):
-    if isinstance(value, dict):
-        value = value.get('composite') if value.get('composite') is not None else value.get('background')
-    if value is None:
-        return False
-    if not isinstance(value, Image.Image):
-        value = core.rgb_image(value)
-    if value.mode in ('RGBA', 'LA'):
-        rgba = value.convert('RGBA')
-        visible = Image.new('RGB', value.size)
-        visible.paste(rgba, mask=rgba.getchannel('A'))
-        value = visible
-    return value.convert('L').getbbox() is not None
+    from .masking import editor_mask
+    mask=editor_mask(value,core.rgb_image)
+    return mask is not None and mask.getbbox() is not None
 
 
 def prepare_mask(image, pose, cfg, custom_mask=None):
@@ -98,7 +89,8 @@ def prepare_mask(image, pose, cfg, custom_mask=None):
             arr[:top]=0; arr[bottom:]=0; arr[:,:left]=0; arr[:,right:]=0
             result=Image.fromarray(arr,'L')
             if result.getbbox() is None:
-                raise ValueError('SAM3 mask missed the selected head. Use a custom mask.')
+                print('[UniversalHeadSwap] SAM3 mask missed the selected head; using the face detector mask.')
+                return None
             return result
         finally:
             # Keep only the small CPU mask cache between previews/generations.

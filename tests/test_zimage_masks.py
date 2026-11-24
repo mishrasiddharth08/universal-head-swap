@@ -33,6 +33,11 @@ class ZImageMaskTests(unittest.TestCase):
                 region=zimage.protect_sam3_neck(region,pose,cfg)
                 self.assertEqual(np.asarray(region.mask)[107:].max(),0)
                 self.assertGreater(np.asarray(region.mask)[60:90,60:90].max(),0)
+                missed=Image.new('L',image.size)
+                missed.putpixel((159,179),255)
+                with patch.object(Fake,'mask',return_value=missed):
+                    self.assertIsNone(zimage.prepare_mask(image,pose,cfg,None))
+                self.assertEqual(zimage._MASKER.released,2)
                 cfg['custom_mask']=mask
                 original=region.mask
                 self.assertIs(zimage.protect_sam3_neck(region,pose,cfg).mask,original)

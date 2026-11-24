@@ -165,7 +165,16 @@ def resolve_adapters(cfg,model,family='klein'):
             raise ValueError('Z-Image head swap requires a Z-Image character LoRA. Select Character LoRA; reference headshots cannot condition Z-Image.')
         if float(cfg.get('char_lora_strength',0))<=0:
             raise ValueError('Z-Image head swap requires Character LoRA strength above 0.')
-        return '',lookup(char,False)
+        key=lookup(char,False)
+        entry=entries[key]
+        checkpoint_info=getattr(model,'sd_checkpoint_info',None)
+        filename=getattr(checkpoint_info,'filename',None) or getattr(model,'sd_model_checkpoint','')
+        active=core.zimage_variant(filename,checkpoint=True) or cfg.get('zimage_variant','Turbo')
+        variant=core.zimage_variant(getattr(entry,'filename',key),entry.metadata) or core.zimage_variant(key)
+        if variant and variant!=active:
+            raise ValueError(f'Character LoRA {key!r} is for Z-Image {variant}. Select a {active} character LoRA.')
+        cfg['zimage_variant']=active
+        return '',key
     wanted=cfg['lora_dropdown']
     if cfg.get('auto_model_adapter',True) or wanted in ('Auto (match model)','None',None,''):
         wanted=core.select_adapter({k:v.metadata for k,v in entries.items()},size,family)
@@ -215,6 +224,8 @@ class ScriptGuard:
 class Session:
     def __init__(self,p,cfg,owner,host,model=None):
         cfg=dict(cfg)
+        if cfg['quality_strict'] and not (cfg['geometry_match'] or cfg['match_sharpness']):
+            raise ValueError('Strict quality requires an enabled geometry or sharpness check. Disabled checks are Not Evaluated.')
         self.p=p; self.cfg=cfg; self.owner=owner; self.host=host; self.model=p.sd_model if model is None else model
         self._reserved_vram_previous=None
         self.family,self.family_size=model_family(self.model,host)
@@ -517,7 +528,7 @@ class Session:
             self.model.ref_latents=latents; self.model.ini_latent=None
         h.dynamic.ref_latents=[]
         p.clear_prompt_cache()
-        label='Krea2' if self.family=='krea' else 'Klein'
+        label={'krea':'Krea2','zimage':'Z-Image','qwen':'Qwen'}.get(self.family,'Klein')
         p.extra_generation_params[label+' reference']=f'slot {selected+1}: {self.labels[selected]} | {reason}'
         self.selected_ref=selected
         p.extra_generation_params[label+' reference dimensions']=' + '.join(f'{im.width}x{im.height}' for im in pair)
@@ -562,7 +573,7 @@ class Session:
                 if cfg['geometry_match'] and (self.region or cfg.get('geometry_correct',False)):
                     try:
                         if self.region:
-                            corrected,correction=core.align_protected_head(image,baseline,target_pose,generated_pose,preserve_aspect=self.family in ('zimage','krea'))
+                            corrected,correction=core.align_protected_head(image,baseline,target_pose,generated_pose,preserve_aspect=True)
                         else:
                             corrected,correction=core.correct_head_scale(image,target_pose,generated_pose)
                         verified=core.nearest_face(self.owner.analyzer.faces(corrected),target_pose,corrected.size)
@@ -584,9 +595,9 @@ class Session:
                 mask=core.build_region(image,pose,0.3,0.2).mask
                 image=Image.composite(image,image.filter(ImageFilter.GaussianBlur(cfg['dof_blur'])),mask)
         if self.region: image=core.composite_region(image,self.region,cfg['color_match'])
-        # Sharpening, tone mapping and grain run on the finished frame. Applied to the
-        # protected crop instead, they stopped at the head mask and left a tonal and
-        # texture step around the hairline and neck.
+        # Finish the frame uniformly, then restore protected pixels. Explicit spot
+        # cleanup runs afterwards so its separate edit mask remains effective.
+        before_finish=image
         if cfg['sharpness']>0: image=image.filter(ImageFilter.UnsharpMask(radius=1.5,percent=round(cfg['sharpness']),threshold=3))
         if cfg['hdr_enable']:
             x=np.asarray(image,dtype=np.float32)/255; linear=np.where(x<=0.04045,x/12.92,((x+0.055)/1.055)**2.4)
@@ -597,6 +608,8 @@ class Session:
             seed=self.plans[min(index,len(self.plans)-1)].seed
             rng=np.random.default_rng(seed%(2**32)); arr=np.asarray(image,dtype=np.float32)
             image=Image.fromarray(np.clip(arr+rng.normal(0,cfg['grain_amount']*255,arr.shape[:2])[...,None],0,255).astype(np.uint8))
+        if self.region:
+            image=Image.composite(image,before_finish,self.region.mask)
         if cfg.get('cleanup_mask') is not None:
             from .cleanup import repair,applies
             if applies(cfg['cleanup_mask'],self.original):
@@ -609,25 +622,43 @@ class Session:
             final_target=core.scale_pose(self.target_pose,self.original.size,image.size)
             final_face=core.nearest_face(self.owner.analyzer.faces(image),final_target,image.size)
             if final_target and final_face:
+                # Both poses already use final-image coordinates.
                 quality['geometry_final']=core.geometry_report(final_target,final_face,
-                    self.original.size,image.size)
+                    image.size,image.size)
+                if self.region and cfg['geometry_match'] and not quality['geometry_final']['geometry_target_met']:
+                    from .geometry_repair import repair
+                    image,repair_report=repair(image,self.region,final_target,final_face,self.owner.analyzer,core)
+                    quality['final_geometry_repair']=repair_report
+                    if repair_report['applied']:
+                        final_face=core.nearest_face(self.owner.analyzer.faces(image),final_target,image.size)
+                        quality['geometry_final']=core.geometry_report(final_target,final_face,image.size,image.size)
                 original_score=core.metrics(core.face_crop(self.original,self.target_pose))['sharp']
                 final_score=core.metrics(core.face_crop(image,final_face))['sharp']
                 quality['detail_final']={'original_score':round(original_score,4),'output_score':round(final_score,4),
                                          'detail_target_met':bool(final_score>=0.95*original_score)}
-        acceptable=(not cfg['geometry_match'] or quality.get('geometry_final',{}).get('geometry_target_met',False)) and (
-                    not cfg['match_sharpness'] or quality.get('detail_final',{}).get('detail_target_met',False))
-        quality['quality_gate_passed']=bool(acceptable)
+        checks={}
+        if cfg['geometry_match']:
+            checks['geometry']=bool(quality.get('geometry_final',{}).get('geometry_target_met',False))
+        if cfg['match_sharpness']:
+            checks['sharpness']=bool(quality.get('detail_final',{}).get('detail_target_met',False))
+        acceptable=all(checks.values()) if checks else None
+        quality['quality_checks']=checks
+        quality['quality_gate_passed']=acceptable
+        quality['quality_gate_status']='Not Evaluated' if acceptable is None else ('Passed' if acceptable else 'Failed')
+        quality['quality_gate_scope']='Enabled geometry / sharpness checks only; visual and identity acceptance require separate review.'
+        if self.family=='zimage':
+            quality['profile_warning']='Experimental Z-Image head inpainting: the audited Turbo character-LoRA profile (9 Euler/Beta steps, denoise 0.65, broad face/hair mask) failed visual acceptance. Pose, head scale and background continuity are not validated. Review every output; this warning does not apply to ordinary text-to-image generation.'
         quality['pixel_head_resizing_enabled']=bool(cfg['geometry_match'] and (self.region or cfg.get('geometry_correct',False)))
         quality['removal_verification']='Prompt-guided only; no tattoo/piercing detector. Inspect all visible skin at 100%.'
         self.quality_history.append(quality)
         self.owner.last_report['quality']=quality
         self.owner.last_report['quality_history']=list(self.quality_history)
-        label='Krea2' if self.family=='krea' else 'Klein'
+        label={'krea':'Krea2','zimage':'Z-Image','qwen':'Qwen'}.get(self.family,'Klein')
         self.p.extra_generation_params[label+' quality']=json.dumps(quality,ensure_ascii=False,separators=(',',':'))
         if cfg['quality_strict'] and not acceptable:
             raise ValueError('Output failed the head-size / detail quality gate and was not saved. Inspect Show last generation report; adjust reference, sampling size or mask context.')
-        if not acceptable: self.host.shared.state.textinfo=f'{label}: output quality needs review; see Show last generation report.'
+        if acceptable is not True or self.family=='zimage':
+            self.host.shared.state.textinfo=f'{label}: quality {quality["quality_gate_status"]}; '+quality.get('profile_warning','See Show last generation report; visual acceptance requires review.')
         auditor=getattr(self.owner,'auditor',None)
         if cfg['identity_check'] and auditor is not None and self.selected_ref is not None:
             from .identity import sample

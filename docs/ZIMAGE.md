@@ -37,7 +37,7 @@ Place it anywhere and point **Local SAM3 checkpoint** at it. The extension loads
 
 **After setup**
 - Z-Image masks: **Z-Image mask → SAM3 (recommended)** (default). The fast face detector takes over automatically on any photo where SAM3 fails, when available; inspect fallback messages and masks.
-- Speed on modern GPUs: set **SAM3 device → GPU (CUDA)** and **precision → BFloat16**. Available precision modes depend on the installed runtime, PyTorch and hardware. INT modes require `torchao`; not every mode has been GPU-tested.
+- SAM3 selects its device and precision automatically. Available precision modes depend on the installed runtime, PyTorch and hardware. INT modes require `torchao`; not every mode has been GPU-tested.
 - Spot detection (tattoos, piercings, symbols) uses the same installation; nothing else to configure.
 
 Nothing downloads during generation. Missing checkpoints or runtime produce a clear message plus face-detector fallback when a supported fallback is available.
